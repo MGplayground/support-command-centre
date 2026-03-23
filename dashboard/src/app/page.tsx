@@ -24,7 +24,9 @@ import { TierType, TimeframeType } from '@/lib/intercom-types';
 import { getTierConfig } from '@/lib/tier-config';
 import LiveTicker from '@/components/LiveTicker';
 import CommonIssuesWidget from '@/components/CommonIssuesWidget';
-import { useEffect } from 'react';
+import ProactiveInsightsBar from '@/components/ProactiveInsightsBar';
+import { computeInsights } from '@/lib/insights-engine';
+import { useEffect, useMemo } from 'react';
 
 import { usePersistedState } from '@/hooks/use-persisted-state';
 
@@ -108,6 +110,9 @@ export default function DashboardPage() {
     );
   }
 
+  // Compute proactive insights from live stats
+  const insights = useMemo(() => computeInsights(stats), [stats]);
+
   // Calculate percentages/progress
   const weekGoal = 500;
   const teamProgress = Math.min(100, (stats.solved.team.week / weekGoal) * 100);
@@ -183,6 +188,9 @@ export default function DashboardPage() {
           />
         </div>
       </div>
+
+      {/* Proactive AI Insights Bar */}
+      <ProactiveInsightsBar insights={insights} />
 
       {/* Navigation Tabs */}
       <div className="flex items-center space-x-2 border-b border-slate-700/50 pb-px">
