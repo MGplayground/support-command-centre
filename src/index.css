@@ -1,0 +1,304 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* HSL Modern Palette - Highly Vibrant */
+  --liquid-bg-raw: 222, 47%, 11%;
+  --liquid-bg: hsla(var(--liquid-bg-raw), 0.75);
+  --liquid-border: hsla(210, 40%, 96%, 0.1);
+  --liquid-highlight: hsla(210, 40%, 96%, 0.05);
+
+  --neon-blue: hsl(199, 89%, 54%);
+  --neon-indigo: hsl(239, 84%, 67%);
+  --neon-cyan: hsl(187, 92%, 45%);
+  --neon-purple: hsl(270, 95%, 75%);
+
+  --text-primary: hsla(0, 0%, 100%, 0.95);
+  --text-secondary: hsla(215, 25%, 72%, 0.8);
+  --text-tertiary: hsla(215, 25%, 72%, 0.4);
+
+  /* Glass Effects */
+  --glass-blur: 20px;
+  --glass-saturate: 180%;
+}
+
+body {
+  background: transparent;
+  color: var(--text-primary);
+  font-family: 'Outfit', 'Inter', -apple-system, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+}
+
+/* Base Utility Classes */
+.glass-effect {
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+.inner-glow {
+  box-shadow: inset 0 1px 0 hsla(0, 0%, 100%, 0.1),
+    inset 0 0 20px hsla(199, 89%, 54%, 0.05);
+}
+
+.liquid-shadow {
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.5);
+}
+
+
+/* --- Liquid Glass Components --- */
+
+/* The main app background with deep gradient */
+.app-background {
+  background: radial-gradient(circle at top left, hsla(199, 89%, 54%, 0.1), transparent 40%),
+    radial-gradient(circle at bottom right, hsla(270, 95%, 75%, 0.05), transparent 40%),
+    linear-gradient(180deg, hsla(var(--liquid-bg-raw), 0.95) 0%, hsla(var(--liquid-bg-raw), 0.8) 100%);
+  position: relative;
+}
+
+/* Sophisticated glass card with inner glow */
+.liquid-card {
+  background: var(--liquid-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--liquid-border);
+  border-radius: 24px;
+  box-shadow:
+    0 20px 50px -12px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 hsla(0, 0%, 100%, 0.1);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.liquid-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, hsla(199, 89%, 54%, 0.1), transparent 40%);
+  pointer-events: none;
+}
+
+.liquid-card:hover {
+  border-color: hsla(199, 89%, 54%, 0.3);
+  box-shadow:
+    0 30px 60px -12px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 hsla(0, 0%, 100%, 0.15);
+  transform: translateY(-4px) scale(1.005);
+}
+
+/* Stat Tile - Smaller, punchier cards */
+.liquid-tile {
+  background: rgba(30, 41, 59, 0.4);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 1rem;
+}
+
+
+
+/* --- Typography --- */
+
+.text-glow {
+  text-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
+}
+
+.liquid-gradient-text {
+  background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.liquid-gradient-text-blue {
+  background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 2px rgba(56, 189, 248, 0.3));
+}
+
+.section-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* --- Controls --- */
+
+/* Modern Pill Button */
+.liquid-button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.liquid-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: scale(1.02);
+}
+
+.liquid-button.primary {
+  background: linear-gradient(135deg, var(--neon-blue), #0ea5e9);
+  border: none;
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+}
+
+.liquid-button.primary:hover {
+  box-shadow: 0 6px 16px rgba(56, 189, 248, 0.5);
+}
+
+/* Liquid Input */
+.liquid-input {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  color: white;
+  width: 100%;
+  transition: all 0.2s;
+}
+
+.liquid-input:focus {
+  outline: none;
+  border-color: var(--neon-blue);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+/* --- Progress Bars --- */
+
+.liquid-progress-bg {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 9999px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.liquid-progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
+  position: relative;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+}
+
+/* Shimmer effect for progress bars */
+.liquid-progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(255, 255, 255, 0.4),
+      transparent);
+  transform: skewX(-20deg) translateX(-150%);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: skewX(-20deg) translateX(150%);
+  }
+}
+
+/* --- Animations --- */
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes bloom {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+    filter: blur(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes slide-right {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-bloom {
+  animation: bloom 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-right {
+  animation: slide-right 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: hsla(0, 0%, 100%, 0.1);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsla(0, 0%, 100%, 0.2);
+}

@@ -1,0 +1,47 @@
+{
+  "name": "support-cockpit",
+  "version": "1.0.0",
+  "description": "Ultimate Support Cockpit & AI Assistant - Desktop widget for Tier 2 Support",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "electron": "electron .",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "electron",
+    "support",
+    "ai",
+    "widget"
+  ],
+  "author": "Support Team",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "date-fns": "^2.30.0",
+    "dotenv": "^17.2.3",
+    "framer-motion": "^10.16.4",
+    "lucide-react": "^0.292.0",
+    "openai": "^4.20.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "electron": "^27.1.0",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.0",
+    "vite-plugin-electron": "^0.14.1",
+    "wait-on": "^7.2.0"
+  }
+}
