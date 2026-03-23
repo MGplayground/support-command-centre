@@ -48,7 +48,7 @@ function MonthTrendBadge({ current, previous }: { current: number; previous: num
 }
 
 export default function ReviewsWidget() {
-    const { data, isLoading } = useSWR('/api/reviews', fetcher, { refreshInterval: 15 * 60 * 1000 });
+    const { data, isLoading } = useSWR('/api/slack-reviews', fetcher, { refreshInterval: 15 * 60 * 1000 });
 
     if (isLoading) {
         return (
@@ -63,8 +63,8 @@ export default function ReviewsWidget() {
         return (
             <div className="glass-panel p-6 flex flex-col items-center justify-center text-slate-500 min-h-[200px] text-center gap-2">
                 <Settings size={32} className="text-slate-600/50 mb-1" />
-                <p className="text-sm font-semibold text-slate-400">Reviews.io not configured</p>
-                <p className="text-xs text-slate-600">Add <code className="text-violet-400">REVIEWS_IO_API_KEY</code> and <code className="text-violet-400">REVIEWS_IO_STORE_ID</code> to your <code className="text-slate-400">.env.local</code> to enable this widget.</p>
+                <p className="text-sm font-semibold text-slate-400">Slack not configured</p>
+                <p className="text-xs text-slate-600">Add <code className="text-violet-400">SLACK_BOT_TOKEN</code> and <code className="text-violet-400">SLACK_REVIEWS_CHANNEL_ID</code> to your <code className="text-slate-400">.env.local</code> to enable this widget.</p>
             </div>
         );
     }
@@ -77,16 +77,11 @@ export default function ReviewsWidget() {
             <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                     <Star size={16} className="text-amber-400 fill-amber-400" />
-                    Customer Reviews
+                    Company Reviews
                 </h3>
-                <a
-                    href="https://www.g2.com"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1 text-xs text-slate-500 hover:text-violet-400 transition-colors"
-                >
-                    View on G2 <ExternalLink size={10} />
-                </a>
+                <span className="flex items-center gap-1 text-xs text-slate-500">
+                    Live from Slack
+                </span>
             </div>
 
             {/* Stats Row */}
@@ -115,7 +110,7 @@ export default function ReviewsWidget() {
 
             {/* Total */}
             <div className="flex items-center justify-between text-xs text-slate-500 border-t border-slate-700/50 pt-3">
-                <span>{totalCount.toLocaleString()} total reviews on Reviews.io</span>
+                <span>{totalCount.toLocaleString()} total reviews evaluated</span>
             </div>
 
             {/* Recent Reviews */}
@@ -126,6 +121,11 @@ export default function ReviewsWidget() {
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs font-medium text-slate-300">{r.author}</span>
+                                    {r.platform && r.platform !== "Unknown" && (
+                                        <span className="text-[10px] uppercase font-bold text-violet-400 bg-violet-900/30 px-1.5 py-0.5 rounded">
+                                            {r.platform}
+                                        </span>
+                                    )}
                                     <StarRating rating={r.rating} />
                                 </div>
                                 {r.date_created && (
