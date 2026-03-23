@@ -24,6 +24,7 @@ import { TierType, TimeframeType } from '@/lib/intercom-types';
 import { getTierConfig } from '@/lib/tier-config';
 import LiveTicker from '@/components/LiveTicker';
 import CommonIssuesWidget from '@/components/CommonIssuesWidget';
+import ReviewsWidget from '@/components/ReviewsWidget';
 import ProactiveInsightsBar from '@/components/ProactiveInsightsBar';
 import { computeInsights } from '@/lib/insights-engine';
 import { useEffect, useMemo } from 'react';
@@ -92,6 +93,9 @@ export default function DashboardPage() {
   const primaryLabel = isCurrentWeek ? 'This Week' : tfConfig.name;
   const secondaryLabel = isCurrentWeek ? 'Month' : tfConfig.name;
 
+  // Hooks must be declared before any early returns (Rules of Hooks)
+  const insights = useMemo(() => stats ? computeInsights(stats) : [], [stats]);
+
   if (isError) {
     return (
       <div className="flex h-screen items-center justify-center text-red-400">
@@ -110,8 +114,6 @@ export default function DashboardPage() {
     );
   }
 
-  // Compute proactive insights from live stats
-  const insights = useMemo(() => computeInsights(stats), [stats]);
 
   // Calculate percentages/progress
   const weekGoal = 500;
@@ -489,8 +491,11 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Common Issues Breakdown */}
-            <CommonIssuesWidget issues={stats.commonIssues} />
+            {/* Right Column: Common Issues + Reviews stacked */}
+            <div className="flex flex-col gap-6">
+              <CommonIssuesWidget issues={stats.commonIssues} />
+              <ReviewsWidget />
+            </div>
           </div>
 
           <AIChat />
