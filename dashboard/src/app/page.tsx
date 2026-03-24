@@ -91,7 +91,7 @@ export default function DashboardPage() {
     ? endOfWeek(now, { weekStartsOn: 1 })
     : now;
   const primaryLabel = isCurrentWeek ? 'This Week' : tfConfig.name;
-  const secondaryLabel = isCurrentWeek ? 'Month' : tfConfig.name;
+  const secondaryLabel = 'Month'; // always calendar-month data regardless of timeframe
 
   // Hooks must be declared before any early returns (Rules of Hooks)
   const insights = useMemo(() => stats ? computeInsights(stats) : [], [stats]);

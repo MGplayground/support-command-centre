@@ -68,9 +68,14 @@ export async function getDatabricksStats(
         ? `WHERE team_assignee_id IN (${teamIds.map(id => `'${id}'`).join(', ')})`
         : ``;
 
+    // Use the earliest required timestamp as the base filter so that month-level
+    // aggregations aren't silently truncated when startOfMonthTs < startOfPrevWeekTs
+    // (e.g. early in the week when last-Monday is after the 1st of the month).
+    const baseTs = Math.min(startOfPrevWeekTs, startOfMonthTs);
+
     const sql = `
         WITH base_conversations AS (
-            SELECT 
+            SELECT
                 id,
                 team_assignee_id,
                 admin_assignee_id,
@@ -82,7 +87,7 @@ export async function getDatabricksStats(
                 statistics.last_closed_by_id AS closed_by_id,
                 statistics.first_admin_reply_at AS first_reply_at
             FROM intercom.bronze.intercom_conversations
-            WHERE updated_at >= ${startOfPrevWeekTs}
+            WHERE updated_at >= ${baseTs}
         ),
         
         filtered_team_convs AS (

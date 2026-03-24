@@ -474,7 +474,7 @@ async function fetchIntercomStats(
 
         // [4] Prev week conversations — STILL NEEDED for FRT Trends! Just need the FRT numbers so 3 pages is fine.
         () => {
-            const prevCacheKey = `prevWeek_${teamId || 'all'}`;
+            const prevCacheKey = `prevWeek_${teamId || 'all'}:${timeframeParam}`;
             const diskCached = getCachedPrevWeek(diskState, prevCacheKey);
             if (diskCached) return Promise.resolve(diskCached);
 
@@ -1166,7 +1166,7 @@ async function fetchIntercomStats(
                         // Deduplicate by ID
                         const id = String(c.id);
                         if (seenRecentIds.has(id)) return false;
-                        seenIds.add(id);
+                        seenRecentIds.add(id);
 
                         const closedAt = c.statistics?.last_close_at || c.updated_at;
                         if (closedAt <= startOfWeekTs) return false;
