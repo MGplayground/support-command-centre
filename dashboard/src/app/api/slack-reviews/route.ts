@@ -5,6 +5,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 let cache: { data: any; fetchedAt: number } | null = null;
 
+// In-memory cache for Slack user ID → display name lookups
+const userNameCache = new Map<string, string>();
+
 export interface ReviewData {
     rating: number;
     author: string;
@@ -19,6 +22,57 @@ function countInRange(reviews: any[], fromTs: number, toTs: number): number {
         const ts = new Date(r.date_created).getTime();
         return ts >= fromTs && ts < toTs;
     }).length;
+}
+
+/**
+ * Extracts all unique Slack user IDs from message texts (e.g. <@U08BD9HLNKB>)
+ */
+function extractUserIds(texts: string[]): string[] {
+    const ids = new Set<string>();
+    const pattern = /<@([A-Z0-9]+)>/g;
+    for (const text of texts) {
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+            ids.add(match[1]);
+        }
+    }
+    return Array.from(ids);
+}
+
+/**
+ * Resolves Slack user IDs to display names, using cache to avoid redundant API calls.
+ * Falls back to the raw ID if lookup fails.
+ */
+async function resolveUserIds(slack: WebClient, userIds: string[]): Promise<Map<string, string>> {
+    const toFetch = userIds.filter(id => !userNameCache.has(id));
+
+    await Promise.all(toFetch.map(async (userId) => {
+        try {
+            const info = await slack.users.info({ user: userId });
+            const user = info.user as any;
+            // Prefer display_name → real_name → name, in that order
+            const name =
+                user?.profile?.display_name?.trim() ||
+                user?.profile?.real_name?.trim() ||
+                user?.name?.trim() ||
+                userId;
+            userNameCache.set(userId, name);
+        } catch {
+            // If lookup fails, keep the raw ID so the message still makes sense
+            userNameCache.set(userId, userId);
+        }
+    }));
+
+    return userNameCache;
+}
+
+/**
+ * Replaces all <@USERID> occurrences in text with the resolved display name.
+ */
+function substituteUserIds(text: string, nameMap: Map<string, string>): string {
+    return text.replace(/<@([A-Z0-9]+)>/g, (_, userId) => {
+        return nameMap.get(userId) || userId;
+    });
 }
 
 export async function GET() {
@@ -46,7 +100,8 @@ export async function GET() {
             limit: 100,
         });
 
-        const messages = result.messages || [];
+        const messages = (result.messages || []).filter(m => m.text && !m.subtype);
+
         if (messages.length === 0) {
             const emptyData = {
                 avgRating: 0, totalCount: 0, thisWeek: 0, lastWeek: 0,
@@ -56,58 +111,65 @@ export async function GET() {
             return NextResponse.json(emptyData);
         }
 
-        // Format raw messages for Gemini to parse
-        const rawTexts = messages
-            .filter(m => m.text && !m.subtype) // Ignore system messages
-            .map(m => `[TIMESTAMP: ${m.ts}]\n${m.text}`)
-            .join('\n\n---\n\n');
+        // ── Step 1: Resolve all @mentions to real names ──────────────────────────
+        const rawTexts = messages.map(m => m.text || '');
+        const userIds = extractUserIds(rawTexts);
+        console.log(`[Slack Reviews] Resolving ${userIds.length} unique user IDs to names...`);
+        const nameMap = await resolveUserIds(slack, userIds);
 
+        // ── Step 2: Pre-process messages — substitute IDs with real names ─────────
+        const processedMessages = messages.map(m => {
+            const cleanedText = substituteUserIds(m.text || '', nameMap);
+            return `[TIMESTAMP: ${m.ts}]\n${cleanedText}`;
+        });
+
+        const rawBlock = processedMessages.join('\n\n---\n\n');
+
+        // ── Step 3: Send pre-processed text to Gemini for review extraction ───────
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         const prompt = `
-        You are a data parser. Extract customer reviews from the following raw Slack messages.
-        Some messages may be conversations, ignore them if they are not reviews.
-        For each review, extract:
-        - rating: number between 1 and 5 (guess based on text if no stars are present, e.g. "Amazing!" = 5, "Terrible" = 1)
-        - author: name of the reviewer (or "Anonymous" if not found)
-        - title: a short summary of the review (max 5 words, generate one if missing)
-        - body: the actual review text
-        - date_created: the ISO string date derived from the [TIMESTAMP: 12345.678] tag (which is a Unix epoch in seconds)
-        - platform: the platform (e.g. "G2", "Shopify", "Reviews.io" or "Unknown")
-
-        Respond ONLY with a valid JSON array of objects, like this:
-        [
-          {
-             "rating": 5,
-             "author": "John Doe",
-             "title": "Great product!",
-             "body": "I love using this tool.",
-             "date_created": "2023-10-01T12:00:00Z",
-             "platform": "G2"
-          }
-        ]
+        You are a data parser. Extract customer reviews from the following Slack messages.
+        These messages are from a Slack channel that receives notifications when customers leave reviews on G2, Shopify, Reviews.io, or similar platforms.
         
-        Do not include markdown codeblocks (like \`\`\`json). Just the raw JSON array.
+        Each Slack message typically follows a pattern like:
+        "New 5* review on G2 for [Company]: [Reviewer Name] said [review text]"
+        OR
+        "New G2 review from [Name]: [review text]"
         
-        Raw messages:
-        ${rawTexts}
+        Instructions:
+        - Find ONLY notifications about customer reviews. Ignore unrelated team messages.
+        - For each review, extract:
+          - rating: number 1–5 (parse star symbols ⭐ or "5*" or "5 stars"; infer from tone if absent)
+          - author: the name of the CUSTOMER who wrote the review (NOT the Slack bot or team member who posted the message)
+          - title: a 1–5 word summary (generate one if not present)
+          - body: the customer's actual review text (strip Slack formatting like *bold* or _italics_)
+          - date_created: ISO 8601 datetime from the [TIMESTAMP: X.XXX] tag (Unix seconds)
+          - platform: "G2", "Shopify", "Reviews.io", or "Unknown"
+        
+        Respond ONLY with a valid JSON array. No markdown code blocks, no explanation.
+        Example:
+        [{"rating":5,"author":"Jane Smith","title":"Game changer","body":"This tool saved us hours every week.","date_created":"2024-01-15T09:30:00Z","platform":"G2"}]
+        
+        Messages:
+        ${rawBlock}
         `;
 
         const response = await model.generateContent(prompt);
         let responseText = response.response.text().trim();
-        
+
         // Strip markdown if Gemini accidentally included it
-        if (responseText.startsWith('```json')) responseText = responseText.replace('```json', '');
-        if (responseText.startsWith('```')) responseText = responseText.replace('```', '');
-        if (responseText.endsWith('```')) responseText = responseText.slice(0, -3);
+        responseText = responseText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
 
         const parsedReviews: ReviewData[] = JSON.parse(responseText.trim());
+        console.log(`[Slack Reviews] Gemini parsed ${parsedReviews.length} reviews from ${messages.length} messages.`);
 
-        // Time range boundaries
+        // ── Step 4: Compute time-range stats ─────────────────────────────────────
         const now = new Date();
+        const dayOfWeek = now.getDay();
         const startOfThisWeek = new Date(now);
-        startOfThisWeek.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1)); // Mon
+        startOfThisWeek.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
         startOfThisWeek.setHours(0, 0, 0, 0);
 
         const startOfLastWeek = new Date(startOfThisWeek);
@@ -118,8 +180,8 @@ export async function GET() {
         const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
         const totalCount = parsedReviews.length;
-        const avgRating = totalCount > 0 
-            ? parsedReviews.reduce((sum, r) => sum + r.rating, 0) / totalCount 
+        const avgRating = totalCount > 0
+            ? parsedReviews.reduce((sum, r) => sum + r.rating, 0) / totalCount
             : 0;
 
         const data = {
@@ -138,7 +200,6 @@ export async function GET() {
 
     } catch (err: any) {
         console.error('[Slack Reviews API]', err.message);
-        // Return stale cache if we have it
         if (cache) return NextResponse.json(cache.data);
         return NextResponse.json({ error: err.message }, { status: 500 });
     }
