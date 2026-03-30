@@ -278,14 +278,17 @@ export async function searchHistoricalConversations(keyword: string, limit: numb
 export async function getCommonIssuesBreakdown(limit: number = 5) {
     const lookbackTs = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60); // Past 30 days
 
-    // Classify the initial message body into themes from a sample of recent tickets to ensure speed
+    // Stage 1 (CTE): classify each ticket body once.
+    // Stage 2: group on the already-computed string — avoids Databricks' restriction
+    // on referencing non-deterministic AI function aliases in GROUP BY.
     const sql = `
-        SELECT 
-            ai_classify(body, ARRAY('technical bug', 'billing/pricing', 'onboarding', 'feature request', 'how-to', 'other')) AS issue_theme,
-            COUNT(*) as frequency,
-            MAX(body) as example_ticket
-        FROM (
-            SELECT LEFT(source.body, 1000) as body
+        WITH classified AS (
+            SELECT
+                LEFT(source.body, 1000) AS body,
+                ai_classify(
+                    LEFT(source.body, 1000),
+                    array('technical bug', 'billing/pricing', 'onboarding', 'feature request', 'how-to', 'other')
+                ) AS issue_theme
             FROM intercom.bronze.intercom_conversations
             WHERE state = 'closed'
               AND updated_at >= ${lookbackTs}
@@ -293,10 +296,14 @@ export async function getCommonIssuesBreakdown(limit: number = 5) {
             ORDER BY updated_at DESC
             LIMIT 100
         )
+        SELECT
+            issue_theme,
+            COUNT(*)       AS frequency,
+            MAX(body)      AS example_ticket
+        FROM classified
         GROUP BY issue_theme
         ORDER BY frequency DESC
         LIMIT ${limit}
-        /* CACHE_BUST: ${Math.floor(Date.now() / (3600000))} */
     `;
 
     return await executeDatabricksQuery(sql);
