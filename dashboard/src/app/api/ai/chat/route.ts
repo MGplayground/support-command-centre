@@ -1,11 +1,46 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { searchHistoricalConversations } from '@/lib/databricks';
+import { WebClient } from '@slack/web-api';
+
+const SLACK_CACHE_TTL = 5 * 60 * 1000;
+let slackCache = { data: '', fetchedAt: 0 };
+
+async function fetchSlackKnowledge() {
+    const token = process.env.SLACK_BOT_TOKEN;
+    const channelIdsStr = process.env.SLACK_SUPPORT_CHANNEL_IDS;
+    
+    if (!token || !channelIdsStr) return '';
+    
+    if (Date.now() - slackCache.fetchedAt < SLACK_CACHE_TTL) {
+        return slackCache.data;
+    }
+    
+    const channelIds = channelIdsStr.split(',').map(id => id.trim()).filter(Boolean);
+    const slack = new WebClient(token);
+    
+    try {
+        const results = await Promise.all(
+            channelIds.map(async (channelId) => {
+                const res = await slack.conversations.history({ channel: channelId, limit: 50 });
+                const msgs = (res.messages || [])
+                    .filter(m => m.text && !m.subtype) // Ignore systemic messages
+                    .map(m => `[Channel ${channelId}] ${m.text}`)
+                    .join('\n');
+                return msgs;
+            })
+        );
+        
+        const combined = results.join('\n\n---\n\n');
+        slackCache = { data: combined, fetchedAt: Date.now() };
+        return combined;
+    } catch (e: any) {
+        console.error('[AI Chat] Slack fetch failed:', e.message);
+        return slackCache.data; // Stale fallback
+    }
+}
 
 // Initialize Gemini
-// Note: In Next.js, process.env.VITE_GEMINI_API_KEY needs to be accessed
-// mapped to a server env var or just accessed directly if using dotenv/next config.
-// Since we copied .env to .env.local, Next.js loads it into process.env.
 const apiKey = process.env.VITE_GEMINI_API_KEY;
 
 export async function POST(req: Request) {
@@ -21,38 +56,47 @@ export async function POST(req: Request) {
 
         // PRE-FLIGHT CHECK: Does the user want historical data?
         const preflightPrompt = `
-You are a search intent analyzer for a customer support AI. Read the user's question. 
-If the user is asking how to solve a problem (e.g. "how do we handle X", "what is the fix for Y", "how did we resolve Z"), extract the core topic and return ONLY a concise search phrase (1-3 words) to query a database of historical tickets. 
-Do NOT include filler words like "how to" or "fix". Just the topic (e.g., "billing error", "password reset", "login issue").
-If they are exclusively asking about dashboard metrics, agent stats, or CSAT scores without asking how to solve a problem, return the exact string "NO_SEARCH".
+        You are a search intent analyzer for a customer support AI. Read the user's question. 
+        If the user is asking how to solve a problem (e.g. "how do we handle X", "what is the fix for Y", "how did we resolve Z"), extract the core topic and return ONLY a concise search phrase (1-3 words) to query a database of historical tickets. 
+        Do NOT include filler words like "how to" or "fix". Just the topic (e.g., "billing error", "password reset", "login issue").
+        If they are exclusively asking about dashboard metrics, agent stats, or CSAT scores without asking how to solve a problem, return the exact string "NO_SEARCH".
 
-User Question: ${message}
-`;
+        User Question: ${message}
+        `;
         const preflightResult = await model.generateContent(preflightPrompt);
         const searchIntent = preflightResult.response.text().trim();
         
         let historicalContext = '';
-        try {
-            if (searchIntent && searchIntent !== 'NO_SEARCH' && !searchIntent.includes('NO_SEARCH')) {
-                console.log(`[AI Chat] Executing Historical Search for: "${searchIntent}"`);
-                const historicalTickets = await searchHistoricalConversations(searchIntent);
-                if (historicalTickets && historicalTickets.length > 0) {
-                     historicalContext = `
-        HISTORICAL KNOWLEDGE BASE MATCHES FOR "${searchIntent}":
-        ${JSON.stringify(historicalTickets, null, 2)}
         
-        The user is asking how to solve a problem. Read the historical tickets above, figure out how the admin solved the issue for the customer in the past, and summarize the solution for the user clearly.
-        `;
-                } else {
-                     historicalContext = `
-        HISTORICAL KNOWLEDGE BASE MATCHES: None found for "${searchIntent}".
-        `;
-                }
-            }
-        } catch (searchError) {
-            console.error('[AI Chat] Historical Search failed:', searchError);
-            // Fallback: don't crash the whole request if search fails
-            historicalContext = '\n(Note: Historical knowledge base search is currently unavailable, but I can still analyze real-time dashboard data for you.)\n';
+        if (searchIntent && searchIntent !== 'NO_SEARCH' && !searchIntent.includes('NO_SEARCH')) {
+            console.log(`[AI Chat] Executing Knowledge Search for: "${searchIntent}"`);
+            
+            const [historicalTickets, recentSlackMsgs] = await Promise.all([
+                searchHistoricalConversations(searchIntent).catch(e => {
+                    console.error('[AI Chat] DB Search failed:', e);
+                    return null;
+                }),
+                fetchSlackKnowledge().catch(e => {
+                    console.error('[AI Chat] Slack fetch failed:', e);
+                    return '';
+                })
+            ]);
+
+            historicalContext = `
+            ======================================================================
+            [DATABRICKS HISTORICAL TICKETS FOR "${searchIntent}"]:
+            ${historicalTickets && historicalTickets.length > 0 ? JSON.stringify(historicalTickets, null, 2) : 'None found.'}
+            
+            [RECENT SLACK DISCUSSIONS & WORKAROUNDS]:
+            ${recentSlackMsgs ? recentSlackMsgs : 'No recent Slack discussions available.'}
+            ======================================================================
+            
+            INSTRUCTIONS FOR SOLVING THE USER'S PROBLEM:
+            The user is asking a troubleshooting question. 
+            1. First check the RECENT SLACK DISCUSSIONS to see if the team has discussed this recently, as this will have the most up-to-date workarounds.
+            2. Then check the DATABRICKS HISTORICAL TICKETS to see how it was solved before.
+            3. Synthesize a clear, 3-step diagnosis and fix for the user. Explicitly cite "According to recent Slack discussions..." or "According to historical tickets..." where applicable.
+            `;
         }
 
         const systemPrompt = `

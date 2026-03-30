@@ -178,7 +178,7 @@ export default function WeeklyDrilldownModal({ weekStartTs, onClose }: WeeklyDri
                             </div>
 
                             {/* Chart */}
-                            <div className="h-72 w-full">
+                            <div className="h-72 w-full" style={{ minHeight: 288 }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <ComposedChart data={dailyData} margin={{ top: 10, right: 8, left: -20, bottom: 0 }}>
                                         <defs>

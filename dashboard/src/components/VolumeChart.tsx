@@ -117,14 +117,15 @@ export default function VolumeChart({ stats }: VolumeChartProps) {
                         <Tooltip
                             content={<CustomTooltip />}
                             cursor={{ fill: 'rgba(139, 92, 246, 0.1)' }}
-                            wrapperStyle={{ pointerEvents: 'auto' }}
+                            wrapperStyle={{ pointerEvents: 'none' }} // Let clicks pass through the tooltip
                         />
                         <Bar
                             dataKey="totalCount"
                             radius={[4, 4, 0, 0]}
                             barSize={32}
                             fillOpacity={0.9}
-                            isAnimationActive={false} // Prevents click-interception issues during transition
+                            isAnimationActive={false}
+                            className="cursor-pointer" // Force pointer
                             onClick={(dataOuter: any) => {
                                 const payload = dataOuter?.payload || dataOuter;
                                 if (payload && payload.weekStartTs) {
