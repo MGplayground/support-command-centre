@@ -5,6 +5,7 @@ export interface ElectronAPI {
     startDrag: (mousePos: { x: number; y: number }) => void;
     dragWindow: (mousePos: { x: number; y: number }) => void;
     endDrag: () => void;
+    invokeAPI: (channel: string, ...args: any[]) => Promise<any>;
 }
 
 declare global {

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useIntercom } from '@/hooks/useIntercom';
 import {
   Users as UsersIcon, LayoutGrid, Clock, CheckCircle, Flame, Target, MessageSquare, Zap, Activity, ShieldCheck,
-  TrendingDown, TrendingUp, MonitorPlay, Monitor, Search, BarChart3, RotateCw, Play, Pause, ListFilter, SlidersHorizontal, ArrowUpRight, AlertTriangle, AlertCircle, Loader2, Users, Trophy
+  TrendingDown, TrendingUp, MonitorPlay, Monitor, Search, BarChart3, RotateCw, Play, Pause, ListFilter, SlidersHorizontal, ArrowUpRight, AlertTriangle, AlertCircle, Loader2, Users, Trophy, GitMerge, Plus, Timer, Info
 } from "lucide-react";
 
 import { clsx } from 'clsx';
@@ -57,13 +57,13 @@ export default function DashboardPage() {
   }, [isAutoCycle]);
 
   // Fast-pass: Load core Intercom metrics immediately (skip Databricks)
-  const { stats: quickStats, isLoading: isQuickLoading, isError: isQuickError, refresh: refreshQuick } = useIntercom(currentTier, currentTimeframe, {
+  const { stats: quickStats, isLoading: isQuickLoading, isError: isQuickError, isValidating: isQuickValidating, refresh: refreshQuick } = useIntercom(currentTier, currentTimeframe, {
     refreshInterval,
     isLightweight: true
   });
 
   // Slow-pass: Load heavy Databricks insights in the background
-  const { stats: fullStats, isLoading: isFullLoading, refresh: refreshFull } = useIntercom(currentTier, currentTimeframe, {
+  const { stats: fullStats, isLoading: isFullLoading, isValidating: isFullValidating, refresh: refreshFull } = useIntercom(currentTier, currentTimeframe, {
     refreshInterval,
     isLightweight: false
   });
@@ -71,6 +71,7 @@ export default function DashboardPage() {
   // Combine them: Use fullStats if available, otherwise quickStats with undefined insights
   const stats = fullStats || quickStats;
   const isLoading = isQuickLoading && !stats;
+  const isTransitioning = isFullValidating || isQuickValidating;
   const isError = isQuickError;
 
   const refresh = () => {
@@ -91,7 +92,16 @@ export default function DashboardPage() {
     ? endOfWeek(now, { weekStartsOn: 1 })
     : now;
   const primaryLabel = isCurrentWeek ? 'This Week' : tfConfig.name;
-  const secondaryLabel = 'Month'; // always calendar-month data regardless of timeframe
+  
+  // Monthly Pace Calculation
+  const daysInMonth = new Date(now.getUTCFullYear(), now.getUTCMonth() + 1, 0).getDate();
+  const daysElapsed = now.getUTCDate();
+  const monthProgressPct = (daysElapsed / daysInMonth) * 100;
+  const monthlyGoal = 2000;
+  const monthlyPaceTarget = (daysElapsed / daysInMonth) * monthlyGoal;
+  const monthPaceDiff = stats ? stats.solved.team.month - monthlyPaceTarget : 0;
+  const monthPacePct = monthlyPaceTarget > 0 ? (monthPaceDiff / monthlyPaceTarget) * 100 : 0;
+  const secondaryLabel = 'Month'; // restored for lower widgets
 
   // Hooks must be declared before any early returns (Rules of Hooks)
   const insights = useMemo(() => stats ? computeInsights(stats) : [], [stats]);
@@ -180,8 +190,9 @@ export default function DashboardPage() {
           <TimeframeToggle currentTimeframe={currentTimeframe} onTimeframeChange={setCurrentTimeframe} />
           <TierToggle currentTier={currentTier} onTierChange={setCurrentTier} />
           <RefreshControl
-            isRefreshing={isLoading}
+            isRefreshing={isTransitioning}
             lastUpdated={stats.lastUpdated}
+            source={stats.source}
             onRefresh={() => refresh()}
             refreshInterval={refreshInterval}
             onIntervalChange={setRefreshInterval}
@@ -190,6 +201,18 @@ export default function DashboardPage() {
           />
         </div>
       </div>
+
+      {isTransitioning && (
+        <div className="absolute top-20 right-0 left-0 flex justify-center z-50 pointer-events-none">
+          <div className="bg-violet-600/90 text-white backdrop-blur-md px-4 py-2 rounded-full text-xs font-semibold shadow-[0_0_20px_rgba(139,92,246,0.5)] flex items-center space-x-2 animate-pulse border border-violet-400/50">
+            <svg className="animate-spin h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>Syncing Databricks...</span>
+          </div>
+        </div>
+      )}
 
       {/* Proactive AI Insights Bar */}
       <ProactiveInsightsBar insights={insights} />
@@ -226,39 +249,22 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
 
 
-            {/* Metric 1: Team Solves (Month) */}
+            {/* Metric 1: Team Solves (Weekly) */}
             <div className="glass-panel p-6 relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <Activity size={64} className="text-violet-400" />
               </div>
-              <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider">Team Solves ({secondaryLabel})</h3>
-              <div className="mt-2 flex items-baseline">
-                <span className="text-5xl font-bold text-white">{stats.solved.team.month}</span>
-                {stats.solved.team.monthTrend !== undefined && stats.solved.team.monthTrend !== 0 && (
-                  <div className="ml-3">
-                    <TrendBadge value={stats.solved.team.monthTrend} />
+              <div className="flex items-center gap-2">
+                <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider">Team Solves (Weekly)</h3>
+                <div className="group/tip relative cursor-help">
+                  <Info size={14} className="text-slate-500 hover:text-slate-300 transition-colors" />
+                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover/tip:block w-48 p-2 bg-slate-900 border border-slate-700 rounded text-[10px] text-slate-300 z-50 shadow-xl">
+                    Monday-anchored total. Remains fixed even when changing timeline toggle.
                   </div>
-                )}
+                </div>
               </div>
-              <div className="mt-4 w-full bg-slate-700/50 rounded-full h-1.5">
-                {/* Assuming a monthly team goal of ~2000 (4x the weekly 500 goal) */}
-                <div
-                  className="bg-violet-500 h-1.5 rounded-full transition-all duration-1000"
-                  style={{ width: `${Math.min(100, (stats.solved.team.month / 2000) * 100)}%` }}
-                />
-              </div>
-            </div>
-
-
-
-            {/* Metric 2: Team Week */}
-            <div className="glass-panel p-6 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Users size={64} className="text-blue-400" />
-              </div>
-              <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider">Team Solves ({primaryLabel})</h3>
               <div className="mt-2 flex items-baseline">
-                <span className="text-5xl font-bold text-white">{stats.solved.team.week}</span>
+                <span className="text-5xl font-bold text-white">{stats.solved.team.week ?? '—'}</span>
                 {stats.solved.team.weekTrend !== undefined && stats.solved.team.weekTrend !== 0 && (
                   <div className="ml-3">
                     <TrendBadge value={stats.solved.team.weekTrend} />
@@ -267,9 +273,42 @@ export default function DashboardPage() {
               </div>
               <div className="mt-4 w-full bg-slate-700/50 rounded-full h-1.5">
                 <div
-                  className="bg-blue-500 h-1.5 rounded-full transition-all duration-1000"
-                  style={{ width: `${teamProgress}%` }}
+                  className="bg-violet-500 h-1.5 rounded-full transition-all duration-1000"
+                  style={{ width: `${Math.min(100, ((stats.solved.team.week || 0) / 500) * 100)}%` }}
                 />
+              </div>
+            </div>
+
+
+
+            {/* Metric 2: Team solves (Monthly) */}
+            <div className="glass-panel p-6 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                <Users size={64} className="text-blue-400" />
+              </div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider">Team Solves (Monthly)</h3>
+                <div className="group/tip relative cursor-help">
+                  <Info size={14} className="text-slate-500 hover:text-slate-300 transition-colors" />
+                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover/tip:block w-48 p-2 bg-slate-900 border border-slate-700 rounded text-[10px] text-slate-300 z-50 shadow-xl">
+                    1st-of-month anchored total. Updated with Pace indicator vs monthly goal of 2000.
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-3">
+                <span className="text-5xl font-bold text-white">{stats.solved.team.month}</span>
+                <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${monthPacePct >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                   {monthPacePct >= 0 ? '+' : ''}{Math.round(monthPacePct)}% vs Pace
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                <div className="flex-1 bg-slate-700/50 rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className="bg-blue-500 h-1.5 rounded-full transition-all duration-1000"
+                    style={{ width: `${Math.min(100, (stats.solved.team.month / monthlyGoal) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-[10px] text-slate-500 font-medium">{Math.round((stats.solved.team.month / monthlyGoal) * 100)}%</span>
               </div>
             </div>
 
@@ -370,7 +409,64 @@ export default function DashboardPage() {
 
           </div>
 
-          {/* Volume Chart & Churn Risk Section */}
+          {/* Secondary Metrics Row — Operational detail */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+            {/* New Conversations This Week */}
+            <div className="glass-panel px-5 py-4 flex items-center space-x-4 group">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                <Plus size={18} className="text-violet-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider truncate">New {primaryLabel}</p>
+                <p className="text-2xl font-bold text-white">{stats.chatVolume.newThisWeek ?? '—'}</p>
+                <p className="text-xs text-slate-500 mt-0.5">conversations opened</p>
+              </div>
+            </div>
+
+            {/* Reassignments */}
+            <div className="glass-panel px-5 py-4 flex items-center space-x-4 group">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                <GitMerge size={18} className="text-cyan-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider truncate">Reassignments {primaryLabel}</p>
+                <p className="text-2xl font-bold text-white">{stats.chatVolume.handoverCount ?? '—'}</p>
+                <p className="text-xs text-slate-500 mt-0.5">incl. bot → human</p>
+              </div>
+            </div>
+
+            {/* Median Reply Time */}
+            <div className="glass-panel px-5 py-4 flex items-center space-x-4 group">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <Timer size={18} className="text-emerald-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider truncate">Median Reply</p>
+                <p className="text-2xl font-bold text-white">
+                  {stats.frt.medianReplyTime ? formatTime(stats.frt.medianReplyTime) : '—'}
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">per conversation</p>
+              </div>
+            </div>
+
+            {/* Avg Resolution Time */}
+            <div className="glass-panel px-5 py-4 flex items-center space-x-4 group">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                <Clock size={18} className="text-amber-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider truncate">Avg Resolution</p>
+                <p className="text-2xl font-bold text-white">
+                  {stats.frt.avgResolutionTime ? formatTime(stats.frt.avgResolutionTime) : '—'}
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">open → closed</p>
+              </div>
+            </div>
+
+          </div>
+
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 glass-panel p-6 flex flex-col">
               <h3 className="text-slate-400 text-sm font-medium uppercase tracking-wider mb-4">Conversation Volume (8-Week Trend)</h3>

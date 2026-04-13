@@ -60,8 +60,11 @@ export async function executeDatabricksQuery(sql: string) {
 export async function getDatabricksStats(
     teamIds: string[] | null,
     startOfMonthTs: number,
-    startOfWeekTs: number,
-    startOfPrevWeekTs: number,
+    startOfWeekTs: number, // Fixed Monday anchor
+    startOfPrevWeekTs: number, // Fixed Previous Monday anchor
+    startTimeframeTs: number, // Dynamic toggle anchor
+    startOfPrevTimeframeTs: number, // Dynamic toggle prev anchor
+    startOfDayTs: number, 
     myAdminId: string
 ) {
     const teamFilter = teamIds && teamIds.length > 0
@@ -69,9 +72,8 @@ export async function getDatabricksStats(
         : ``;
 
     // Use the earliest required timestamp as the base filter so that month-level
-    // aggregations aren't silently truncated when startOfMonthTs < startOfPrevWeekTs
-    // (e.g. early in the week when last-Monday is after the 1st of the month).
-    const baseTs = Math.min(startOfPrevWeekTs, startOfMonthTs);
+    // or timeframe-level aggregations aren't silently truncated.
+    const baseTs = Math.min(startOfPrevWeekTs, startOfMonthTs, startTimeframeTs, startOfPrevTimeframeTs);
 
     const sql = `
         WITH base_conversations AS (
@@ -100,12 +102,21 @@ export async function getDatabricksStats(
             COUNT(CASE WHEN state = 'closed' AND updated_at >= ${startOfMonthTs} THEN id END) AS team_month_solves,
             -- Week Counts
             COUNT(CASE WHEN state = 'closed' AND updated_at >= ${startOfWeekTs} THEN id END) AS team_week_solves,
+            -- Daily Counts
+            COUNT(CASE WHEN state = 'closed' AND updated_at >= ${startOfDayTs} THEN id END) AS team_day_solves,
             -- Prev Week Counts
             COUNT(CASE WHEN state = 'closed' AND updated_at >= ${startOfPrevWeekTs} AND updated_at < ${startOfWeekTs} THEN id END) AS team_prev_week_solves,
             
+            -- Prev Timeframe Counts (Dynamic Toggle)
+            COUNT(CASE WHEN state = 'closed' AND updated_at >= ${startOfPrevTimeframeTs} AND updated_at < ${startTimeframeTs} THEN id END) AS team_prev_timeframe_solves,
+            
+            -- Timeframe Counts (Dynamic Toggle)
+            COUNT(CASE WHEN state = 'closed' AND updated_at >= ${startTimeframeTs} THEN id END) AS team_timeframe_solves,
+
             -- Personal Counts
             COUNT(CASE WHEN state = 'closed' AND closed_by_id = '${myAdminId}' AND updated_at >= ${startOfMonthTs} THEN id END) AS personal_month_solves,
             COUNT(CASE WHEN state = 'closed' AND closed_by_id = '${myAdminId}' AND updated_at >= ${startOfWeekTs} THEN id END) AS personal_week_solves,
+            COUNT(CASE WHEN state = 'closed' AND closed_by_id = '${myAdminId}' AND updated_at >= ${startTimeframeTs} THEN id END) AS personal_timeframe_solves,
             
             -- Month CSAT
             AVG(CASE WHEN csat_rating IS NOT NULL AND updated_at >= ${startOfMonthTs} THEN csat_rating END) AS csat_month_avg,
@@ -117,7 +128,15 @@ export async function getDatabricksStats(
             
             -- Prev Week CSAT
             AVG(CASE WHEN csat_rating IS NOT NULL AND updated_at >= ${startOfPrevWeekTs} AND updated_at < ${startOfWeekTs} THEN csat_rating END) AS csat_prev_week_avg,
-            COUNT(CASE WHEN csat_rating IS NOT NULL AND updated_at >= ${startOfPrevWeekTs} AND updated_at < ${startOfWeekTs} THEN id END) AS csat_prev_week_count
+            COUNT(CASE WHEN csat_rating IS NOT NULL AND updated_at >= ${startOfPrevWeekTs} AND updated_at < ${startOfWeekTs} THEN id END) AS csat_prev_week_count,
+
+            -- Timeframe CSAT
+            AVG(CASE WHEN csat_rating IS NOT NULL AND updated_at >= ${startTimeframeTs} THEN csat_rating END) AS csat_timeframe_avg,
+            COUNT(CASE WHEN csat_rating IS NOT NULL AND updated_at >= ${startTimeframeTs} THEN id END) AS csat_timeframe_count,
+
+            -- Prev Timeframe CSAT
+            AVG(CASE WHEN csat_rating IS NOT NULL AND updated_at >= ${startOfPrevTimeframeTs} AND updated_at < ${startTimeframeTs} THEN csat_rating END) AS csat_prev_timeframe_avg,
+            COUNT(CASE WHEN csat_rating IS NOT NULL AND updated_at >= ${startOfPrevTimeframeTs} AND updated_at < ${startTimeframeTs} THEN id END) AS csat_prev_timeframe_count
             
         FROM filtered_team_convs;
     `;
@@ -275,8 +294,12 @@ export async function searchHistoricalConversations(keyword: string, limit: numb
  * Get a breakdown of the most common issues among all recent closed tickets.
  * Uses Databricks AI to classify the conversation topics.
  */
-export async function getCommonIssuesBreakdown(limit: number = 5) {
+export async function getCommonIssuesBreakdown(limit: number = 5, teamIds: string[] | null = null) {
     const lookbackTs = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60); // Past 30 days
+
+    const teamFilter = teamIds && teamIds.length > 0
+        ? `AND team_assignee_id IN (${teamIds.map(id => `'${id}'`).join(', ')})`
+        : '';
 
     // Stage 1 (CTE): classify each ticket body once.
     // Stage 2: group on the already-computed string — avoids Databricks' restriction
@@ -293,6 +316,7 @@ export async function getCommonIssuesBreakdown(limit: number = 5) {
             WHERE state = 'closed'
               AND updated_at >= ${lookbackTs}
               AND source.body IS NOT NULL
+              ${teamFilter}
             ORDER BY updated_at DESC
             LIMIT 100
         )

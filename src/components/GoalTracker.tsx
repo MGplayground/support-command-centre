@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Target, Plus, Flame, Trash2, Check, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Target, Plus, Flame, Trash2, Check, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface Goal {
     id: string;

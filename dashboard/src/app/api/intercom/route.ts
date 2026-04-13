@@ -5,8 +5,10 @@ import { getDatabricksStats, getWeeklyVolumeWithSentiment, getChurnRiskAccounts,
 import { readDiskCache, writeDiskCache, getCachedStats, getCachedPrevWeek, setCachedStats, setCachedPrevWeek } from '@/lib/disk-cache';
 import type { } from '@/lib/disk-cache';
 import { TAG_ID_TO_PRODUCT, T1_AFFILIATED_TEAM_IDS, PRODUCT_CONFIGS } from '@/lib/product-config';
+import { getTierConfig, T1_TEAM_ID, T1_AFFILIATED_TEAMS } from '@/lib/tier-config';
 import { TimeframeType } from '@/lib/intercom-types';
 import { getTimeframeConfig } from '@/lib/timeframe-config';
+import { calculateDashboardAnchors } from '@/lib/temporal';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { getIntercomIdFromSession } from '@/lib/admin-config';
@@ -55,7 +57,9 @@ async function startBackgroundWarmup() {
 
     const primeTiers = [
         { teamId: 'all', timeframe: 'current_week' as TimeframeType },
-        { teamId: '7096884', timeframe: 'current_week' as TimeframeType } // T1 Support
+        { teamId: '7096884', timeframe: 'current_week' as TimeframeType }, // T1 Support
+        { teamId: '7710348', timeframe: 'current_week' as TimeframeType }, // T2 Support
+        { teamId: '7712996', timeframe: 'current_week' as TimeframeType }, // T3 Development
     ];
 
     const runWarmupCycle = async () => {
@@ -127,27 +131,40 @@ export async function GET(request: NextRequest) {
     const now = Date.now();
     const cached = cache[cacheKey];
 
-    // 1. Fully fresh — return immediately
+    // Compute temporal anchors here so fingerprint validation can use them
+    const anchors = calculateDashboardAnchors(new Date(), timeframeParam, timeframeConfig.days);
+
+    // 1. Fully fresh — check fingerprints to ensure timeframe hasn't shifted
     if (cached?.data && (now - cached.lastFetch < CACHE_TTL)) {
-        console.log(`[API/Intercom] [Block 1] Fresh Hit for ${cacheKey}. Churn: ${cached.data.churnRiskAccounts?.length || 0}`);
-        return NextResponse.json(cached.data);
+        // Validation: If it's a new day/week/month, don't serve "fresh" cache from a previous window
+        const cachedFingerprint = cached.data._diagnostics?.fingerprints?.week;
+        if (cachedFingerprint === anchors.startOfWeekTs) {
+            console.log(`[API/Intercom] [Block 1] Fresh Hit for ${cacheKey}. Churn: ${cached.data.churnRiskAccounts?.length || 0}`);
+            return NextResponse.json(cached.data);
+        } else {
+            console.log(`[API/Intercom] Timeframe drift detected (Block 1). Cached: ${cachedFingerprint}, Current: ${anchors.startOfWeekTs}. Forcing Refresh.`);
+        }
     }
 
     // 2. Stale but usable — serve cached data immediately, refresh in background
     if (cached?.data && (now - cached.lastFetch < STALE_TTL) && !cached.isFetching) {
-        console.log(`[API/Intercom] [Block 2] Stale Hit for ${cacheKey}. Triggering BG refresh.`);
-        cache[cacheKey].isFetching = true;
-        // Fire-and-forget background refresh
-        fetchIntercomStats(teamId !== 'all' ? teamId : null, timeframeParam, timeframeConfig, myAdminId, isLightweight)
-            .then(stats => {
-                cache[cacheKey] = { data: stats, lastFetch: Date.now(), isFetching: false };
-                console.log(`[API/Intercom] BG Refresh complete for ${cacheKey}`);
-            })
-            .catch(err => {
-                console.error(`[Intercom] Background refresh failed for ${cacheKey}:`, err);
-                if (cache[cacheKey]) cache[cacheKey].isFetching = false;
-            });
-        return NextResponse.json(cached.data);
+        // Even for stale-while-revalidate, if the logic window has moved (e.g. Monday morning), 
+        // we should probably NOT serve Sunday's data because it's fundamentally wrong for the week.
+        if (cached.data._diagnostics?.fingerprints?.week === anchors.startOfWeekTs) {
+            console.log(`[API/Intercom] [Block 2] Stale Hit for ${cacheKey}. Triggering BG refresh.`);
+            cache[cacheKey].isFetching = true;
+            fetchIntercomStats(teamId !== 'all' ? teamId : null, timeframeParam, timeframeConfig, myAdminId, isLightweight)
+                .then(stats => {
+                    cache[cacheKey] = { data: stats, lastFetch: Date.now(), isFetching: false };
+                    console.log(`[API/Intercom] BG Refresh complete for ${cacheKey}`);
+                })
+                .catch(err => {
+                    console.error(`[Intercom] Background refresh failed for ${cacheKey}:`, err);
+                    if (cache[cacheKey]) cache[cacheKey].isFetching = false;
+                });
+            return NextResponse.json(cached.data);
+        }
+        console.log(`[API/Intercom] Stale timeframe detected in Block 2. Falling through to fresh fetch.`);
     }
 
     // 3. No cache or too stale — must fetch synchronously (first load)
@@ -235,7 +252,6 @@ async function fetchIntercomStats(
                 const pageResult = await makeIntercomRequest(path, pageBody);
                 const pageItems = pageResult[arrayKey] || [];
                 collected = [...collected, ...pageItems];
-                startingAfter = pageResult.pages?.next?.starting_after;
                 if (!startingAfter || pageItems.length === 0) break;
             } catch { break; }
         }
@@ -263,7 +279,6 @@ async function fetchIntercomStats(
             return conv.team_assignee_id && Number(conv.team_assignee_id) === targetTeamId;
         });
 
-
         return filtered;
     };
 
@@ -288,33 +303,8 @@ async function fetchIntercomStats(
     }
 
     const now = new Date();
-
-    // ── Timezone-aware date boundaries (all UTC) ──────────────────────
-    // Using UTC ensures consistent boundaries regardless of server timezone.
-
-    let startOfWeekTs: number;
-    let startOfPrevWeekTs: number;
-
-    if (timeframeParam === 'current_week') {
-        const dayOfWeek = now.getUTCDay();
-        const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-        const startOfWeek = new Date(Date.UTC(
-            now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diffToMonday, 0, 0, 0
-        ));
-        startOfWeekTs = Math.floor(startOfWeek.getTime() / 1000);
-        startOfPrevWeekTs = startOfWeekTs - (7 * 24 * 60 * 60);
-    } else {
-        const startOfPeriod = new Date(Date.UTC(
-            now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - config.days, 0, 0, 0
-        ));
-        startOfWeekTs = Math.floor(startOfPeriod.getTime() / 1000);
-        startOfPrevWeekTs = startOfWeekTs - (config.days * 24 * 60 * 60);
-    }
-
-    // Start of Month (1st 00:00 UTC)
-    // Month remains static so "Team Solves (Month)" always acts as a baseline anchor
-    const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0));
-    const startOfMonthTs = Math.floor(startOfMonth.getTime() / 1000);
+    const anchors = calculateDashboardAnchors(now, timeframeParam, config.days);
+    const { startOfDayTs, startOfMonthTs, startOfWeekTs, startOfPrevWeekTs, startTimeframeTs, startOfPrevTimeframeTs } = anchors;
 
     // Helper to build queries with Server-Side Team Filtering
     const buildSolveQuery = (sinceTs: number, adminId: string | null = null) => {
@@ -393,14 +383,16 @@ async function fetchIntercomStats(
 
     // Task Definitions - Increased pagination to capture all team conversations
 
-    const prevWeekQuery = {
-        operator: 'AND',
-        value: [
-            { field: 'state', operator: '=', value: 'closed' },
-            { field: 'updated_at', operator: '>', value: startOfPrevWeekTs },
-            { field: 'updated_at', operator: '<', value: startOfWeekTs }
-        ]
-    };
+    const prevWeekQueryRules: any[] = [
+        { field: 'state', operator: '=', value: 'closed' },
+        { field: 'updated_at', operator: '>', value: startOfPrevWeekTs },
+        { field: 'updated_at', operator: '<', value: startOfWeekTs }
+    ];
+    // Apply the same team filter to prev-week so FRT trends are tier-isolated
+    if (teamId && teamId !== 'all' && teamId !== T1_TEAM_ID) {
+        prevWeekQueryRules.push({ field: 'team_assignee_id', operator: '=', value: Number(teamId) });
+    }
+    const prevWeekQuery = { operator: 'AND', value: prevWeekQueryRules };
 
     const isT1 = teamId === T1_TEAM_ID;
 
@@ -409,14 +401,27 @@ async function fetchIntercomStats(
         ? Array.from(T1_AFFILIATED_TEAMS).map(String)
         : [teamId === 'all' ? null : teamId].filter(Boolean) as string[];
 
-    console.log(`\n[Dashboard] Fetching Databricks Aggregates for tier: ${teamId || 'ALL'}`);
+    console.log(`\n[Dashboard/Investigation] Tier: ${teamId || 'ALL'}, Timeframe: ${timeframeParam}`);
+    console.log(`[Dashboard/Investigation] Current Time (Server): ${now.toISOString()}`);
+    console.log(`[Dashboard/Investigation] Timestamps: 
+      - Today: ${new Date(startOfDayTs * 1000).toISOString()} (${startOfDayTs})
+      - Week (StartOfWeek): ${new Date(startOfWeekTs * 1000).toISOString()} (${startOfWeekTs})
+      - PrevWeek: ${new Date(startOfPrevWeekTs * 1000).toISOString()} (${startOfPrevWeekTs})
+      - Month: ${new Date(startOfMonthTs * 1000).toISOString()} (${startOfMonthTs})`);
+
     const dbStatsPromise = getDatabricksStats(
         targetTeams.length > 0 ? targetTeams : null,
         startOfMonthTs,
         startOfWeekTs,
         startOfPrevWeekTs,
+        startTimeframeTs,
+        startOfPrevTimeframeTs,
+        startOfDayTs,
         myAdminId
-    ).catch(e => {
+    ).then(stats => {
+        console.log(`[Dashboard/Investigation] Raw Databricks Response:`, JSON.stringify(stats, null, 2));
+        return stats;
+    }).catch(e => {
         console.error('[Databricks Error]', e);
         return null;
     });
@@ -439,9 +444,10 @@ async function fetchIntercomStats(
         return [];
     });
 
-    // Fetch common issue themes using AI classification
+    // Fetch common issue themes using AI classification — scoped to current tier
     const commonIssuesPromise = isLightweight ? Promise.resolve([]) : getCommonIssuesBreakdown(
-        5 // Top 5 themes
+        5, // Top 5 themes
+        targetTeams.length > 0 ? targetTeams : null
     ).catch(e => {
         console.error('[Databricks Common Issues Error]', e);
         return [];
@@ -613,9 +619,19 @@ async function fetchIntercomStats(
         return closedAt > startOfWeekTs;
     });
 
+    // Filter for Day
+    const teamDayConversations = teamConversations.filter((c: any) => {
+        const closedAt = c.statistics?.last_close_at || c.updated_at;
+        return closedAt > startOfDayTs;
+    });
+
     // TOTAL TEAM SOLVES
-    const teamMonthCountTotal = dbStats ? Number((dbStats as any).team_month_solves || 0) : teamConversations.length + ticketWeekCount;
+    // We compute these by filtering the unified teamConversations collection
+    // This allows us to have stable Week/Month anchors even if the timeframe toggle is set to 30/60/90 days.
+    const teamMonthCountTotal = dbStats ? Number((dbStats as any).team_month_solves || 0) : teamConversations.filter((c: any) => (c.statistics?.last_close_at || c.updated_at) > startOfMonthTs).length + (ticketWeekCount > 0 ? Math.floor(ticketWeekCount * 4) : 0);
     const teamWeekCountTotal = dbStats ? Number((dbStats as any).team_week_solves || 0) : teamWeekConversations.length + ticketWeekCount;
+    const teamDayCountTotal = dbStats ? Number((dbStats as any).team_day_solves || 0) : teamDayConversations.length + (ticketWeekCount > 0 ? Math.floor(ticketWeekCount / 5) : 0);
+    const teamTimeframeCountTotal = dbStats ? Number((dbStats as any).team_timeframe_solves || 0) : teamConversations.filter((c: any) => (c.statistics?.last_close_at || c.updated_at) > startTimeframeTs).length + ticketWeekCount;
 
     // Process Personal Data
     const myConversations = myWeekRaw.conversations || [];
@@ -623,6 +639,10 @@ async function fetchIntercomStats(
         const closedAt = c.statistics?.last_close_at || c.updated_at;
         return closedAt > startOfWeekTs;
     });
+
+    const myMonthCount = dbStats ? Number((dbStats as any).personal_month_solves || 0) : myConversations.filter((c: any) => (c.statistics?.last_close_at || c.updated_at) > startOfMonthTs).length;
+    const myWeekCount = dbStats ? Number((dbStats as any).personal_week_solves || 0) : myWeekConversations.length;
+    const myTimeframeCount = dbStats ? Number((dbStats as any).personal_timeframe_solves || 0) : myConversations.filter((c: any) => (c.statistics?.last_close_at || c.updated_at) > startTimeframeTs).length;
 
     // ----- [TIER 2 SPECIFIC METRICS: T3 ESCALATIONS] -----
     let totalEscalationsToT3 = 0;
@@ -676,9 +696,6 @@ async function fetchIntercomStats(
         myT2SlaBreachCount = countBreaches(myWeekConversations);
     }
 
-
-    const myMonthCount = dbStats ? Number((dbStats as any).personal_month_solves || 0) : 0;
-    const myWeekCount = dbStats ? Number((dbStats as any).personal_week_solves || 0) : myWeekConversations.length;
 
     // Leaderboard - Only count solves for the selected team
     const leaderboard: Record<string, any> = {};
@@ -781,9 +798,37 @@ async function fetchIntercomStats(
         };
     };
 
+    // ── CSAT Tag Exclusions ─────────────────────────────────────────────────
+    // Tags visible in Intercom filter panel — conversations with these are excluded from CSAT score
+    const CSAT_EXCLUSION_TAG_NAMES = [
+        '[ri] exclude csat [banned account]',
+        '[ri] exclude csat free plan',
+        '[ri] exclude csat spam',
+        '[ii] exclude csat free plan',
+        '[ri] cancelled_ac_excludecsat',
+        'usererrorscsat',
+        '[all apps] exclude csat [error verified]',
+        'spam',
+        '[bc] spam',
+        '[clearer.io] general spam',
+    ];
+
+    const hasExclusionTag = (conv: any): boolean => {
+        const tags: any[] = conv.tags?.tags || [];
+        return tags.some(t => CSAT_EXCLUSION_TAG_NAMES.includes((t.name || '').toLowerCase()));
+    };
+
     // Process CSAT with accurate team-assigned dataset
     const csatConversations = csatWeekObjRaw.conversations || [];
-    const csatWeekConversations = csatConversations.filter((c: any) => c.conversation_rating?.requested_at > startOfWeekTs);
+    const csatWeekConversationsRaw = csatConversations.filter((c: any) => c.conversation_rating?.requested_at > startOfWeekTs);
+    const csatWeekExcluded = csatWeekConversationsRaw.filter(hasExclusionTag).length;
+    const csatWeekConversations = csatWeekConversationsRaw.filter((c: any) => !hasExclusionTag(c));
+
+    // Wrap processCSAT to attach excluded count
+    const processCSATWithExclusion = (conversations: any[], excludedCount = 0) => {
+        const result = processCSAT(conversations);
+        return { ...result, excluded: excludedCount };
+    };
 
     // Calculate Hourly Breakdown
     const hourlyBreakdown = Array.from({ length: 24 }, (_, i) => ({
@@ -831,7 +876,8 @@ async function fetchIntercomStats(
             if (sBrand.includes('reviews.io')) return 'Reviews.io';
             if (sBrand.includes('influence')) return 'Influence';
             if (sBrand.includes('boost')) return 'Boost';
-            if (sBrand.includes('clearer')) return 'Clearer';
+            // Require 'clearer.io' (not just 'clearer') to avoid matching the company name broadly
+            if (sBrand === 'clearer.io' || sBrand === 'clearer') return 'Clearer';
             if (sBrand.includes('viralsweep')) return 'ViralSweep';
             if (sBrand.includes('rich returns') || sBrand.includes('richreturns')) return 'Rich Returns';
             if (sBrand.includes('conversionbear') || sBrand.includes('conversion bear')) return 'ConversionBear';
@@ -839,13 +885,16 @@ async function fetchIntercomStats(
         }
 
         // 2. Check Tags (Case-insensitive & Partial matching)
+        // Skip CSAT exclusion/spam tags — they should not be used as product identifiers
         if (conv.tags?.tags) {
             for (const tag of conv.tags.tags) {
                 const tagName = tag.name.toLowerCase();
-                if (tagName.includes('reviews.io')) return 'Reviews.io';
+                if (CSAT_EXCLUSION_TAG_NAMES.includes(tagName)) continue; // skip spam/exclusion tags
+                if (tagName.includes('reviews.io') || tagName.startsWith('[ri]') || tagName.startsWith('[ob]')) return 'Reviews.io';
                 if (tagName.includes('influence')) return 'Influence';
                 if (tagName.includes('boost')) return 'Boost';
-                if (tagName.includes('clearer')) return 'Clearer';
+                // Only match 'clearer.io' in tag names — not bare 'clearer' to avoid false positives
+                if (tagName.includes('clearer.io')) return 'Clearer';
                 if (tagName.includes('viralsweep')) return 'ViralSweep';
                 if (tagName.includes('rich returns') || tagName.includes('richreturns')) return 'Rich Returns';
                 if (tagName.includes('conversionbear')) return 'ConversionBear';
@@ -1095,6 +1144,34 @@ async function fetchIntercomStats(
         ? Math.round(((frtWeek.average - frtPrevWeek.average) / frtPrevWeek.average) * 100)
         : 0;
 
+    // ── New additional metrics (all derived from already-fetched data) ────────
+
+    // Handovers: conversations that were assigned to more than one team/agent
+    const handoverCount = teamWeekConversations.filter(
+        (c: any) => (c.statistics?.count_assignments || 1) > 1
+    ).length;
+
+    // New conversations opened this week (created_at, not closed_at)
+    const newThisWeek = teamConversations.filter(
+        (c: any) => (c.created_at || 0) > startOfWeekTs
+    ).length;
+
+    // Median reply time (median_time_to_reply from statistics, in seconds)
+    const replyTimes = teamWeekConversations
+        .map((c: any) => c.statistics?.median_time_to_reply)
+        .filter((v: any) => typeof v === 'number' && v > 0) as number[];
+    const medianReplyTime = replyTimes.length > 0
+        ? replyTimes.sort((a, b) => a - b)[Math.floor(replyTimes.length / 2)]
+        : 0;
+
+    // Average resolution time (time_to_last_close from statistics, in seconds)
+    const resolutionTimes = teamWeekConversations
+        .map((c: any) => c.statistics?.time_to_last_close)
+        .filter((v: any) => typeof v === 'number' && v > 0) as number[];
+    const avgResolutionTime = resolutionTimes.length > 0
+        ? Math.round(resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length)
+        : 0;
+
     const slaTarget = 15 * 60; // 15 minutes in seconds
     const underSLA = teamWeekConversations.filter((conv: any) => {
         const firstReplyAt = conv.statistics?.first_admin_reply_at; // ✅ Agent's first reply
@@ -1136,16 +1213,19 @@ async function fetchIntercomStats(
     return {
         solved: {
             personal: {
+                day: 0, // Placeholder or compute if needed
                 week: myWeekCount,
                 month: myMonthCount,
-                day: 0,
+                timeframe: myTimeframeCount, // Added
                 weekTrend,
                 monthTrend: 0,
                 ...(isT2 && { escalatedCount: personalEscalationsToT3, breachCount: myT2SlaBreachCount })
             },
             team: {
+                day: teamDayCountTotal,
                 week: teamWeekCountTotal,
                 month: teamMonthCountTotal,
+                timeframe: teamTimeframeCountTotal, // Added
                 weekTrend,
                 monthTrend: 0
             }
@@ -1154,6 +1234,8 @@ async function fetchIntercomStats(
         chatVolume: {
             closed_month: teamMonthCountTotal,
             total: teamWeekCountTotal,
+            newThisWeek,
+            handoverCount,
             active: conversationStates.open + conversationStates.snoozed + conversationStates.pending,
             unassigned: Number(unassignedCount || 0),
             snoozed: conversationStates.snoozed,
@@ -1205,19 +1287,20 @@ async function fetchIntercomStats(
                 trend: frtTrend
             },
             slaCompliance,
-            ...(isT2 && { totalBreaches: t2SlaBreachCount })
+            ...(isT2 && { totalBreaches: t2SlaBreachCount }),
+            medianReplyTime,
+            avgResolutionTime,
         },
         csat: {
-            // Week CSAT is perfectly accurate since we fetched all CSATs for the week
-            week: processCSAT(csatWeekConversations),
-            // Month CSAT is mathematically derived from Databricks since we don't fetch month objects
+            week: processCSATWithExclusion(csatWeekConversations, csatWeekExcluded),
             month: dbStats ? {
                 percentage: (dbStats as any).csat_month_avg ? Math.round((Number((dbStats as any).csat_month_avg) / 5) * 100) : 0,
-                positiveRatings: 0, // Detail not needed for UI at month level
+                positiveRatings: 0,
                 totalRatings: Number((dbStats as any).csat_month_count || 0),
+                excluded: 0,
                 pending: 0,
                 remarks: []
-            } : processCSAT(csatConversations),
+            } : processCSATWithExclusion(csatConversations.filter((c: any) => !hasExclusionTag(c))),
             trend: dbStats && (dbStats as any).csat_prev_week_avg
                 ? Math.round(((Number((dbStats as any).csat_week_avg || 0) / 5) * 100) - ((Number((dbStats as any).csat_prev_week_avg) / 5) * 100))
                 : csatTrend
@@ -1254,6 +1337,28 @@ async function fetchIntercomStats(
             example_ticket: String(row.example_ticket || '')
         })),
         products,
+        source: dbStats ? 'databricks' : 'intercom_fallback',
+        _diagnostics: {
+            anchors: {
+                today: new Date(startOfDayTs * 1000).toISOString(),
+                week: new Date(startOfWeekTs * 1000).toISOString(),
+                month: new Date(startOfMonthTs * 1000).toISOString(),
+                timeframe: new Date(startTimeframeTs * 1000).toISOString(),
+            },
+            fingerprints: {
+                week: startOfWeekTs,
+                month: startOfMonthTs
+            },
+            counts: {
+                team: {
+                    day: teamDayCountTotal,
+                    week: teamWeekCountTotal,
+                    month: teamMonthCountTotal,
+                    timeframe: teamTimeframeCountTotal
+                }
+            }
+        },
+        cacheVersion: 2,
         lastUpdated: new Date().toISOString()
     };
 }

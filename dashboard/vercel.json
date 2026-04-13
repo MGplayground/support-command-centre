@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "framework": "nextjs",
+  "regions": ["syd1"],
+  "env": {
+    "VITE_INTERCOM_TOKEN": "@vite_intercom_token",
+    "DATABRICKS_HOST": "@databricks_host",
+    "DATABRICKS_HTTP_PATH": "@databricks_http_path",
+    "DATABRICKS_TOKEN": "@databricks_token",
+    "GOOGLE_GENERATIVE_AI_API_KEY": "@google_generative_ai_api_key",
+    "SLACK_BOT_TOKEN": "@slack_bot_token",
+    "NEXTAUTH_SECRET": "@nextauth_secret",
+    "NEXTAUTH_URL": "@nextauth_url"
+  }
+}

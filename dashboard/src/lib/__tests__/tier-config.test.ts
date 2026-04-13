@@ -26,18 +26,18 @@ describe('getTierConfig', () => {
 
 describe('getTierColor', () => {
     it('returns blue for T1', () => {
-        expect(getTierColor('T1')).toBe('blue');
+        expect(getTierColor('T1')).toBe('text-blue-400');
     });
 
     it('returns purple for T2', () => {
-        expect(getTierColor('T2')).toBe('purple');
+        expect(getTierColor('T2')).toBe('text-purple-400');
     });
 
     it('returns cyan for T3', () => {
-        expect(getTierColor('T3')).toBe('cyan');
+        expect(getTierColor('T3')).toBe('text-cyan-400');
     });
 
     it('returns slate for ALL', () => {
-        expect(getTierColor('ALL')).toBe('slate');
+        expect(getTierColor('ALL')).toBe('text-slate-400');
     });
 });

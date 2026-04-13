@@ -10,7 +10,7 @@ interface TierToggleProps {
 }
 
 // Map tier → API teamId param (must match route.ts keys)
-const TIER_TEAM_IDS: Record<TierType, string> = {
+const TIER_TEAM_IDS: Record<string, string> = {
     T1: '7096884',
     T2: '7710348',
     T3: '7712996',

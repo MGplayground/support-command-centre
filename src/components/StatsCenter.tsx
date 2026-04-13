@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import CSATGauge from './CSATGauge';
-import { MessageCircle, Star, Clock, Activity, ArrowUpRight, X, AlertTriangle } from 'lucide-react';
+import { MessageCircle, Activity, X, AlertTriangle } from 'lucide-react';
 import { getIntercomStats } from '../services/intercom';
 
 export default function StatsCenter() {

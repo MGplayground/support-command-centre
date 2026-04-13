@@ -23,7 +23,7 @@ export interface IntercomConversation {
     teammates?: Array<{ id: string; type: string }>;
 }
 
-export type TierType = 'ALL' | 'T1' | 'T2' | 'T3' | '7710348';
+export type TierType = 'ALL' | 'T1' | 'T2' | 'T3';
 
 export type TimeframeType = 'current_week' | 'past_7_days' | 'past_30_days' | 'past_60_days' | 'past_90_days';
 
@@ -71,15 +71,18 @@ export interface TierConfig {
 export interface IntercomStats {
     solved: {
         personal: {
+            day: number;
             week: number;
             month: number;
-            day: number; // Added for completeness
-            weekTrend?: number; // % change vs previous week
-            monthTrend?: number; // % change vs previous month
+            timeframe: number;
+            weekTrend?: number;
+            monthTrend?: number;
         };
         team: {
+            day: number;
             week: number;
             month: number;
+            timeframe: number;
             weekTrend?: number;
             monthTrend?: number;
         };
@@ -97,6 +100,8 @@ export interface IntercomStats {
     chatVolume: {
         closed_month: number;
         total: number;
+        newThisWeek?: number;      // ← newly opened this week
+        handoverCount?: number;    // ← convs handed between teams
         active: number;
         unassigned: number;
         snoozed: number;
@@ -109,23 +114,25 @@ export interface IntercomStats {
             timestamp: number;
             product: string;
         }>;
-        escalationsToT3?: number; // NEW FOR T2
+        escalationsToT3?: number;
     };
     weeklyVolume?: WeeklyVolumeData[];
     churnRiskAccounts?: ChurnRiskAccount[];
     commonIssues?: CommonIssueTheme[];
     frt: {
         today: {
-            average: number; // in minutes
+            average: number;
             median: number;
         };
         week: {
             average: number;
             median: number;
-            trend?: number; // % change vs previous week
+            trend?: number;
         };
-        slaCompliance?: number; // % of conversations under target
-        totalBreaches?: number; // NEW FOR T2
+        slaCompliance?: number;
+        totalBreaches?: number;
+        avgResolutionTime?: number; // avg seconds from open → close
+        medianReplyTime?: number;   // median_time_to_reply across week convs
     };
     csat: {
         week: CSATData;
@@ -133,7 +140,29 @@ export interface IntercomStats {
         trend?: number; // % change in satisfaction
     };
     products?: ProductStats[]; // Stats categorized by product
+    source: 'databricks' | 'intercom_fallback';
+    _diagnostics: {
+        anchors: {
+            today: string;
+            week: string;
+            month: string;
+            timeframe: string;
+        };
+        fingerprints?: {
+            week: number;
+            month: number;
+        };
+        counts: {
+            team: {
+                day: number;
+                week: number;
+                month: number;
+                timeframe: number;
+            };
+        };
+    };
     lastUpdated: string;
+    cacheVersion?: number;
 }
 
 export interface ProductStats {
@@ -159,6 +188,7 @@ export interface CSATData {
     percentage: number;
     positiveRatings: number;
     totalRatings: number;
+    excluded?: number;  // conversations filtered out by exclusion tags
     pending: number;
     remarks: Array<{
         id: string;

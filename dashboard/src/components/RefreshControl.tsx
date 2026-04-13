@@ -7,6 +7,7 @@ import { formatDistanceToNow } from 'date-fns';
 interface RefreshControlProps {
     isRefreshing: boolean;
     lastUpdated: string | null;
+    source?: 'databricks' | 'intercom_fallback';
     onRefresh: () => void;
     refreshInterval: number; // milliseconds
     onIntervalChange: (interval: number) => void;
@@ -25,6 +26,7 @@ const INTERVAL_OPTIONS = [
 export default function RefreshControl({
     isRefreshing,
     lastUpdated,
+    source,
     onRefresh,
     refreshInterval,
     onIntervalChange,
@@ -116,13 +118,28 @@ export default function RefreshControl({
                 )}
             </div>
 
-            {/* Status Indicator */}
-            {refreshInterval > 0 && !isPaused && (
-                <div className="flex items-center space-x-1.5">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-xs text-emerald-400">Live</span>
-                </div>
-            )}
+            {/* Status & Source Indicator */}
+            <div className="flex items-center space-x-3 px-2 border-l border-slate-700/50">
+                {refreshInterval > 0 && !isPaused && (
+                    <div className="flex items-center space-x-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-tight">Active</span>
+                    </div>
+                )}
+                
+                {source && (
+                    <div className={`flex items-center space-x-1.5 px-2 py-0.5 rounded border ${
+                        source === 'databricks' 
+                        ? 'bg-violet-500/10 border-violet-500/30 text-violet-400' 
+                        : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                    }`}>
+                        <div className={`w-1 h-1 rounded-full ${source === 'databricks' ? 'bg-violet-400' : 'bg-amber-400'}`} />
+                        <span className="text-[9px] font-black uppercase tracking-widest leading-none">
+                            {source === 'databricks' ? 'Master' : 'Live'}
+                        </span>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

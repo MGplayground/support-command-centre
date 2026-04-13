@@ -30,6 +30,7 @@ export function useIntercom(tier?: TierType, timeframe?: string, options: UseInt
     if (teamId && teamId !== 'all') params.append('teamId', teamId);
     if (timeframe) params.append('timeframe', timeframe);
     if (isLightweight) params.append('lightweight', 'true');
+    params.append('v', '2'); // Bust old cache shapes for the Refactor
 
     const url = `/api/intercom${params.toString() ? `?${params.toString()}` : ''}`;
 
@@ -50,14 +51,14 @@ export function useIntercom(tier?: TierType, timeframe?: string, options: UseInt
         ? refreshInterval
         : 0;
 
-    const { data, error, isLoading, mutate } = useSWR<IntercomStats>(
+    const { data, error, isLoading, isValidating, mutate } = useSWR<IntercomStats>(
         enabled ? url : null,
         fetcher,
         {
             refreshInterval: effectiveRefreshInterval,
             revalidateOnFocus: true,
             dedupingInterval: 5000,
-            keepPreviousData: true, // Show previous tier's data while new tier loads
+            keepPreviousData: false, // Clear stale data immediately when tier/timeframe changes
             onSuccess: (stats) => {
                 if (onUpdate) {
                     onUpdate(stats);
@@ -69,6 +70,7 @@ export function useIntercom(tier?: TierType, timeframe?: string, options: UseInt
     return {
         stats: data,
         isLoading,
+        isValidating,
         isError: error,
         refresh: mutate
     };
