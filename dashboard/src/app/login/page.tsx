@@ -71,36 +71,8 @@ export default function LoginPage() {
                             <span className="text-white font-medium">Continue with Google</span>
                         </div>
                     </button>
-
-                    <div className="relative py-4">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-slate-800"></div>
-                        </div>
-                        <div className="relative flex justify-center text-sm">
-                            <span className="bg-slate-900 px-2 text-slate-500 rounded-md">Or use a Demo Account</span>
-                        </div>
-                    </div>
-
-                    <button
-                        onClick={() => signIn("credentials", { email: "mauro@clearer.io", name: "Mauro" })}
-                        className="w-full relative group hover:-translate-y-0.5 transition-all duration-300"
-                    >
-                        <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-600 to-cyan-600 rounded-lg blur opacity-50 group-hover:opacity-100 transition duration-300"></div>
-                        <div className="relative flex items-center justify-center space-x-3 bg-slate-900 px-6 py-4 rounded-lg border border-slate-800">
-                            <span className="text-white font-medium">Log in as Mauro (Demo)</span>
-                        </div>
-                    </button>
-
-                    <button
-                        onClick={() => signIn("credentials", { email: "jenson@clearer.io", name: "Jenson" })}
-                        className="w-full relative group hover:-translate-y-0.5 transition-all duration-300"
-                    >
-                        <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg blur opacity-50 group-hover:opacity-100 transition duration-300"></div>
-                        <div className="relative flex items-center justify-center space-x-3 bg-slate-900 px-6 py-4 rounded-lg border border-slate-800">
-                            <span className="text-white font-medium">Log in as Jenson (Demo)</span>
-                        </div>
-                    </button>
                 </div>
+
             </div>
         </div>
     );
