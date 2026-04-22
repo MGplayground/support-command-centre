@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import CredentialsProvider from "next-auth/providers/credentials";
+
+const ALLOWED_DOMAIN = 'clearer.io';
 
 export const authOptions = {
     providers: [
@@ -16,46 +17,29 @@ export const authOptions = {
                 }
             }
         }),
-        CredentialsProvider({
-            name: "Demo Account",
-            credentials: {
-                email: { label: "Email", type: "text", placeholder: "mauro@clearer.io" },
-                name: { label: "Name", type: "text", placeholder: "Mauro" }
-            },
-            async authorize(credentials) {
-                if (credentials?.email) {
-                    return {
-                        id: credentials.email,
-                        name: credentials.name || "Demo User",
-                        email: credentials.email,
-                        image: "https://api.dicebear.com/7.x/avataaars/svg?seed=" + credentials.email
-                    };
-                }
-                return null;
-            }
-        })
     ],
     callbacks: {
+        async signIn({ user }: any) {
+            // Only allow @clearer.io Google accounts
+            const email = user?.email || '';
+            if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
+                console.warn(`[NextAuth] Blocked sign-in attempt from: ${email}`);
+                return false;
+            }
+            return true;
+        },
         async session({ session, token }: any) {
-            console.log("[NextAuth] Session Callback. Token:", { id: token.id, picture: token.picture });
             if (session.user) {
                 session.user.id = token.sub || token.id || token.email;
                 if (token.picture) session.user.image = token.picture;
             }
-            console.log("[NextAuth] Session Output:", { user: session.user });
             return session;
         },
-        async jwt({ token, user, account, profile }: any) {
+        async jwt({ token, user, profile }: any) {
             if (user) {
-                console.log("[NextAuth] JWT initial sign-in. User:", { id: user.id, image: user.image });
                 token.id = user.id;
-                // Capture the image from the unified user object on first sign-in
                 if (user.image) token.picture = user.image;
             }
-            if (profile) {
-                console.log("[NextAuth] JWT Profile:", { picture: profile.picture });
-            }
-            // Fallback to Google profile specifically
             if (profile?.picture) {
                 token.picture = profile.picture;
             }
@@ -63,7 +47,8 @@ export const authOptions = {
         }
     },
     pages: {
-        signIn: '/login', // Custom login page
+        signIn: '/login',
+        error: '/login',
     },
     session: {
         strategy: "jwt" as const,

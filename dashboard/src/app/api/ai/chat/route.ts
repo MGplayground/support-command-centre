@@ -41,9 +41,16 @@ async function fetchSlackKnowledge() {
 }
 
 // Initialize Gemini
-const apiKey = process.env.VITE_GEMINI_API_KEY;
+const apiKey = process.env.AI_SERVICE_CONF;
 
 export async function POST(req: Request) {
+    const { getServerSession } = await import('next-auth');
+    const { authOptions } = await import('@/app/api/auth/[...nextauth]/route');
+    const session = await getServerSession(authOptions);
+    if (!session) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     if (!apiKey) {
         return NextResponse.json({ error: 'Gemini API key not configured' }, { status: 500 });
     }

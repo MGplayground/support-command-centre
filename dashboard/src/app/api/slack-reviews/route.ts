@@ -76,9 +76,16 @@ function substituteUserIds(text: string, nameMap: Map<string, string>): string {
 }
 
 export async function GET() {
+    const { getServerSession } = await import('next-auth');
+    const { authOptions } = await import('@/app/api/auth/[...nextauth]/route');
+    const session = await getServerSession(authOptions);
+    if (!session) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
     const CHANNEL_ID = process.env.SLACK_REVIEWS_CHANNEL_ID;
-    const GEMINI_API_KEY = process.env.VITE_GEMINI_API_KEY;
+    const GEMINI_API_KEY = process.env.AI_SERVICE_CONF;
 
     // Not configured — return graceful empty state
     if (!SLACK_BOT_TOKEN || !CHANNEL_ID || !GEMINI_API_KEY) {

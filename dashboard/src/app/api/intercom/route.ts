@@ -110,6 +110,12 @@ async function startBackgroundWarmup() {
 ensureDiskHydration().then(() => startBackgroundWarmup());
 
 export async function GET(request: NextRequest) {
+    // Defence-in-depth: verify session even if middleware is bypassed
+    const session = await getServerSession(authOptions);
+    if (!session) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     console.log('[API/Intercom] Request initiated for URL:', request.nextUrl.toString());
     const searchParams = request.nextUrl.searchParams;
     const teamId = searchParams.get('teamId') || 'all';
@@ -208,7 +214,7 @@ async function fetchIntercomStats(
     isLightweight: boolean = false
 ): Promise<IntercomStats> {
     const config = timeframeConfig || getTimeframeConfig(timeframeParam);
-    const INTERCOM_TOKEN = process.env.VITE_INTERCOM_TOKEN;
+    const INTERCOM_TOKEN = process.env.INTERCOM;
 
     if (!INTERCOM_TOKEN) {
         throw new Error('INTERCOM_TOKEN not configured');
@@ -1365,9 +1371,9 @@ async function fetchIntercomStats(
 
 
 async function makeIntercomRequest(path: string, body: any = {}, method = 'POST') {
-    const INTERCOM_TOKEN = process.env.VITE_INTERCOM_TOKEN;
+    const INTERCOM_TOKEN = process.env.INTERCOM;
 
-    if (!INTERCOM_TOKEN) throw new Error('Missing VITE_INTERCOM_TOKEN');
+    if (!INTERCOM_TOKEN) throw new Error('Missing INTERCOM token');
 
     const response = await fetch(`https://api.intercom.io${path}`, {
         method,

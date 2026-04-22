@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export interface TicketStats {
     totalEscalated: number;
@@ -8,11 +10,17 @@ export interface TicketStats {
 }
 
 export async function GET() {
-    const INTERCOM_TOKEN = process.env.VITE_INTERCOM_TOKEN;
+    const session = await getServerSession(authOptions);
+    if (!session) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const INTERCOM_TOKEN = process.env.INTERCOM;
 
     if (!INTERCOM_TOKEN) {
         return NextResponse.json({ error: 'INTERCOM_TOKEN not configured' }, { status: 500 });
     }
+
 
     try {
         const t3TeamId = process.env.TIER_3_TEAM_ID || '7712996';
