@@ -126,8 +126,7 @@ export async function GET(request: NextRequest) {
     // Cache key includes tier, timeframe, AND lightweight flag
     const cacheKey = `${teamId}:${timeframeParam}${isLightweight ? ':light' : ''}`;
 
-    // Get current authenticated user
-    const session = await getServerSession(authOptions);
+    // Get current authenticated user (session already validated above)
     const myAdminId = getIntercomIdFromSession(session);
     console.log(`[API/Intercom] Session validated for admin: ${myAdminId}. Checking cache...`);
 
