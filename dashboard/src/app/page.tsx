@@ -22,7 +22,6 @@ import ProductStatsView from '@/components/ProductStatsView';
 import ChurnRiskCard from '@/components/ChurnRiskCard';
 import { TierType, TimeframeType } from '@/lib/intercom-types';
 import { getTierConfig } from '@/lib/tier-config';
-import LiveTicker from '@/components/LiveTicker';
 import CommonIssuesWidget from '@/components/CommonIssuesWidget';
 import ReviewsWidget from '@/components/ReviewsWidget';
 import ProactiveInsightsBar from '@/components/ProactiveInsightsBar';
@@ -600,7 +599,6 @@ export default function DashboardPage() {
         <ProductStatsView stats={stats} />
       )}
 
-      <LiveTicker stats={stats} />
     </div>
 
   );
