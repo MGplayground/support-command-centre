@@ -33,7 +33,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
     },
     {
         name: 'Influence',
-        tagIds: [],
+        tagIds: ['9210661'],
         brandAliases: ['influence'],
         ticketTypeAliases: ['influence'],
         storeIdPrefixes: ['INF_'],
