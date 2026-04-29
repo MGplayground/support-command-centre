@@ -987,12 +987,6 @@ async function fetchIntercomStats(
             productStatsMap[product].weekSolved++;
         }
 
-        if (conv.conversation_rating?.rating) {
-            productStatsMap[product].csatTotal += conv.conversation_rating.rating >= 4 ? 100 : 0;
-            productStatsMap[product].csatCount++;
-        }
-
-        // Add to product-specific leaderboard
         const closerId = conv.statistics?.last_closed_by_id || conv.admin_assignee_id;
         if (closerId) {
             const sCloserId = String(closerId);
@@ -1006,6 +1000,15 @@ async function fetchIntercomStats(
                 };
             }
             productStatsMap[product].leaderboards[sCloserId].count++;
+        }
+    });
+
+    // Calculate CSAT properly from the dedicated CSAT query (fixes missing ratings for some products)
+    csatWeekConversations.forEach((conv: any) => {
+        const product = extractProduct(conv);
+        if (productStatsMap[product] && conv.conversation_rating?.rating) {
+            productStatsMap[product].csatTotal += conv.conversation_rating.rating >= 4 ? 100 : 0;
+            productStatsMap[product].csatCount++;
         }
     });
 
