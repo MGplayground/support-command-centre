@@ -81,7 +81,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
     },
     {
         name: 'Address Validator',
-        tagIds: [],
+        tagIds: ['9210485'],
         brandAliases: ['address validator'],
         ticketTypeAliases: ['address validator'],
         storeIdPrefixes: [],
