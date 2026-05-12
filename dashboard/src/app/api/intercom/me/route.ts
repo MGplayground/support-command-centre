@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { getIntercomIdFromSession } from '@/lib/admin-config';
 
-const INTERCOM_TOKEN = process.env.VITE_INTERCOM_TOKEN;
+const INTERCOM_TOKEN = process.env.INTERCOM;
 
 async function intercomSearch(query: any) {
     const res = await fetch('https://api.intercom.io/conversations/search', {
