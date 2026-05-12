@@ -175,8 +175,13 @@ export async function getWeeklyVolumeWithSentiment(
                 updated_at,
                 team_assignee_id,
                 CASE 
-                    WHEN conversation_rating.remark IS NOT NULL AND TRIM(conversation_rating.remark) != ''
-                    THEN ai_analyze_sentiment(conversation_rating.remark)
+                    WHEN conversation_rating.rating IS NOT NULL THEN
+                        CASE 
+                            WHEN conversation_rating.rating >= 4 THEN 'positive'
+                            WHEN conversation_rating.rating = 3 THEN 'neutral'
+                            WHEN conversation_rating.rating <= 2 THEN 'negative'
+                            ELSE 'neutral'
+                        END
                     ELSE NULL
                 END as sentiment
             FROM intercom.bronze.intercom_conversations
@@ -239,13 +244,18 @@ export async function getChurnRiskAccounts(
             source.author.name AS customer_name,
             conversation_rating.remark AS review,
             updated_at,
-            ai_classify(conversation_rating.remark, ARRAY('technical bugs', 'pricing', 'onboarding', 'other')) AS churn_driver
+            CASE 
+                WHEN LOWER(conversation_rating.remark) LIKE '%bug%' OR LOWER(conversation_rating.remark) LIKE '%error%' OR LOWER(conversation_rating.remark) LIKE '%broken%' THEN 'technical bugs'
+                WHEN LOWER(conversation_rating.remark) LIKE '%price%' OR LOWER(conversation_rating.remark) LIKE '%expensive%' OR LOWER(conversation_rating.remark) LIKE '%cost%' THEN 'pricing'
+                WHEN LOWER(conversation_rating.remark) LIKE '%how to%' OR LOWER(conversation_rating.remark) LIKE '%setup%' OR LOWER(conversation_rating.remark) LIKE '%confusing%' THEN 'onboarding'
+                ELSE 'other'
+            END AS churn_driver
         FROM intercom.bronze.intercom_conversations
         WHERE state = 'closed'
           AND updated_at >= ${lookbackTs}
           AND conversation_rating.remark IS NOT NULL
           AND (
-              ai_analyze_sentiment(conversation_rating.remark) = 'negative'
+              conversation_rating.rating <= 2
               OR LOWER(conversation_rating.remark) LIKE '%cancel%'
               OR LOWER(conversation_rating.remark) LIKE '%frustrat%'
               OR LOWER(conversation_rating.remark) LIKE '%refund%'
@@ -308,10 +318,13 @@ export async function getCommonIssuesBreakdown(limit: number = 5, teamIds: strin
         WITH classified AS (
             SELECT
                 LEFT(source.body, 1000) AS body,
-                ai_classify(
-                    LEFT(source.body, 1000),
-                    array('technical bug', 'billing/pricing', 'onboarding', 'feature request', 'how-to', 'other')
-                ) AS issue_theme
+                CASE 
+                    WHEN LOWER(source.body) LIKE '%bug%' OR LOWER(source.body) LIKE '%error%' OR LOWER(source.body) LIKE '%broken%' THEN 'technical bug'
+                    WHEN LOWER(source.body) LIKE '%price%' OR LOWER(source.body) LIKE '%bill%' OR LOWER(source.body) LIKE '%invoice%' THEN 'billing/pricing'
+                    WHEN LOWER(source.body) LIKE '%how to%' OR LOWER(source.body) LIKE '%setup%' OR LOWER(source.body) LIKE '%start%' THEN 'onboarding'
+                    WHEN LOWER(source.body) LIKE '%add%' OR LOWER(source.body) LIKE '%request%' OR LOWER(source.body) LIKE '%feature%' THEN 'feature request'
+                    ELSE 'other'
+                END AS issue_theme
             FROM intercom.bronze.intercom_conversations
             WHERE state = 'closed'
               AND updated_at >= ${lookbackTs}
