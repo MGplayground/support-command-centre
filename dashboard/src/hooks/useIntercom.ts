@@ -5,7 +5,22 @@ import { IntercomStats, TierType } from '@/lib/intercom-types';
 import { getTierConfig } from '@/lib/tier-config';
 import { useEffect, useState } from 'react';
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+const fetcher = async (url: string) => {
+    const res = await fetch(url);
+    if (res.status === 401) {
+        // Session expired or not logged in — redirect to login
+        window.location.href = '/login';
+        return;
+    }
+    if (!res.ok) {
+        const error: any = new Error('API request failed');
+        error.status = res.status;
+        try { error.info = await res.json(); } catch {}
+        throw error;
+    }
+    return res.json();
+};
+
 
 interface UseIntercomOptions {
     refreshInterval?: number; // milliseconds, 0 = manual only
