@@ -13,6 +13,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { getIntercomIdFromSession } from '@/lib/admin-config';
 
+// Allow Vercel to wait up to 300s (needed for Databricks cold starts)
+export const maxDuration = 300;
+
 // Cache structure per tier
 let cache: Record<string, {
     data: IntercomStats | null;
