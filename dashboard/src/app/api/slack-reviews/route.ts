@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { WebClient } from '@slack/web-api';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 let cache: { data: any; fetchedAt: number } | null = null;
@@ -76,8 +78,6 @@ function substituteUserIds(text: string, nameMap: Map<string, string>): string {
 }
 
 export async function GET() {
-    const { getServerSession } = await import('next-auth');
-    const { authOptions } = await import('@/app/api/auth/[...nextauth]/route');
     const session = await getServerSession(authOptions);
     if (!session) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

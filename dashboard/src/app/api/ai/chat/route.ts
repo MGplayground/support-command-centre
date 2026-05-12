@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { searchHistoricalConversations } from '@/lib/databricks';
 import { WebClient } from '@slack/web-api';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 const SLACK_CACHE_TTL = 5 * 60 * 1000;
 let slackCache = { data: '', fetchedAt: 0 };
@@ -44,8 +46,6 @@ async function fetchSlackKnowledge() {
 const apiKey = process.env.AI_SERVICE_CONF;
 
 export async function POST(req: Request) {
-    const { getServerSession } = await import('next-auth');
-    const { authOptions } = await import('@/app/api/auth/[...nextauth]/route');
     const session = await getServerSession(authOptions);
     if (!session) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
