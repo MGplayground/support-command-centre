@@ -6,6 +6,7 @@ import type { NextRequest } from 'next/server';
 const PUBLIC_PATHS = [
     '/login',
     '/api/auth',    // NextAuth's own endpoints
+    '/api/test-db'  // Temp route for debugging Databricks
 ];
 
 export async function middleware(request: NextRequest) {
