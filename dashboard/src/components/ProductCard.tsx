@@ -1,6 +1,8 @@
 'use client';
 
+import Image from 'next/image';
 import { ProductStats } from '@/lib/intercom-types';
+import { PRODUCT_CONFIGS } from '@/lib/product-config';
 import { Package, CheckCircle, Clock, BarChart2 } from 'lucide-react';
 
 interface ProductCardProps {
@@ -8,6 +10,12 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
+    // Look up the logo path from the centralised product config
+    const productDef = PRODUCT_CONFIGS.find(
+        (p) => p.name.toLowerCase() === product.name.toLowerCase()
+    );
+    const logoSrc = productDef?.logo ?? null;
+
     // Determine color based on product name
     const getProductColor = (name: string) => {
         if (name.includes('Reviews')) return 'violet';
@@ -20,7 +28,6 @@ export default function ProductCard({ product }: ProductCardProps) {
         if (name.includes('Address Validator')) return 'indigo';
         return 'slate';
     };
-
 
     const color = getProductColor(product.name);
 
@@ -42,9 +49,27 @@ export default function ProductCard({ product }: ProductCardProps) {
         <div className="glass-panel p-6 relative overflow-hidden group hover:border-violet-500/50 transition-all duration-300">
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-lg ${theme.bg} border ${theme.border}`}>
-                        <Package className={`h-5 w-5 ${theme.icon}`} />
-                    </div>
+                    {/* Logo or fallback icon */}
+                    {logoSrc ? (
+                        <div className={`p-1.5 rounded-lg ${theme.bg} border ${theme.border} flex items-center justify-center`}
+                            style={{ width: 36, height: 36 }}>
+                            <Image
+                                src={logoSrc}
+                                alt={`${product.name} logo`}
+                                width={24}
+                                height={24}
+                                className="object-contain"
+                                onError={(e) => {
+                                    // Hide broken image; parent will still show the div border
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                            />
+                        </div>
+                    ) : (
+                        <div className={`p-2 rounded-lg ${theme.bg} border ${theme.border}`}>
+                            <Package className={`h-5 w-5 ${theme.icon}`} />
+                        </div>
+                    )}
                     <h3 className="text-lg font-semibold text-white tracking-tight">{product.name}</h3>
                 </div>
                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest bg-slate-800/50 px-2.5 py-1 rounded-full border border-slate-700/50">
@@ -63,7 +88,6 @@ export default function ProductCard({ product }: ProductCardProps) {
                             {product.trend > 0 ? '+' : ''}{product.trend}%
                         </span>
                     </div>
-
                 </div>
 
                 {/* CSAT */}
@@ -117,4 +141,3 @@ export default function ProductCard({ product }: ProductCardProps) {
         </div>
     );
 }
-

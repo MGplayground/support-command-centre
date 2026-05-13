@@ -16,6 +16,8 @@ export interface ProductDef {
     storeIdPrefixes: string[];
     /** Product-specific team IDs in Intercom */
     teamIds: number[];
+    /** Path to the product logo image (relative to /public). Optional — falls back to icon. */
+    logo?: string;
 }
 
 /**
@@ -30,6 +32,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['reviews.io', 'reviews', 'cancellation'],
         storeIdPrefixes: ['RI_'],
         teamIds: [7096884], // REVIEWS.io - Support (T1 main)
+        logo: '/logos/reviews-io.png',
     },
     {
         name: 'Influence',
@@ -38,6 +41,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['influence'],
         storeIdPrefixes: ['INF_'],
         teamIds: [7096885], // Influence.io
+        logo: '/logos/influence.png',
     },
     {
         name: 'Boost',
@@ -62,6 +66,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['viralsweep'],
         storeIdPrefixes: ['VS_'],
         teamIds: [7102403], // ViralSweep
+        logo: '/logos/viralsweep.png',
     },
     {
         name: 'Rich Returns',
@@ -86,6 +91,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['address validator'],
         storeIdPrefixes: [],
         teamIds: [7102393], // Address Validator
+        logo: '/logos/address-validator.png',
     },
 ];
 
