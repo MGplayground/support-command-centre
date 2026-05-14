@@ -1,6 +1,6 @@
 'use client';
 
-import Image from 'next/image';
+import { useState } from 'react';
 import { ProductStats } from '@/lib/intercom-types';
 import { PRODUCT_CONFIGS } from '@/lib/product-config';
 import { Package, CheckCircle, Clock, BarChart2 } from 'lucide-react';
@@ -15,6 +15,7 @@ export default function ProductCard({ product }: ProductCardProps) {
         (p) => p.name.toLowerCase() === product.name.toLowerCase()
     );
     const logoSrc = productDef?.logo ?? null;
+    const [imgError, setImgError] = useState(false);
 
     // Determine color based on product name
     const getProductColor = (name: string) => {
@@ -50,19 +51,17 @@ export default function ProductCard({ product }: ProductCardProps) {
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center space-x-3">
                     {/* Logo or fallback icon */}
-                    {logoSrc ? (
+                    {logoSrc && !imgError ? (
                         <div className={`p-1.5 rounded-lg ${theme.bg} border ${theme.border} flex items-center justify-center`}
                             style={{ width: 36, height: 36 }}>
-                            <Image
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
                                 src={logoSrc}
                                 alt={`${product.name} logo`}
                                 width={24}
                                 height={24}
                                 className="object-contain"
-                                onError={(e) => {
-                                    // Hide broken image; parent will still show the div border
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                }}
+                                onError={() => setImgError(true)}
                             />
                         </div>
                     ) : (

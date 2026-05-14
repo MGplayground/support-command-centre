@@ -32,7 +32,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['reviews.io', 'reviews', 'cancellation'],
         storeIdPrefixes: ['RI_'],
         teamIds: [7096884], // REVIEWS.io - Support (T1 main)
-        logo: '/logos/reviews-io.png',
+        logo: '/logos/reviews-io.jpg',
     },
     {
         name: 'Influence',
@@ -41,7 +41,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['influence'],
         storeIdPrefixes: ['INF_'],
         teamIds: [7096885], // Influence.io
-        logo: '/logos/influence.png',
+        logo: '/logos/influence.jpg',
     },
     {
         name: 'Boost',
@@ -66,7 +66,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['viralsweep'],
         storeIdPrefixes: ['VS_'],
         teamIds: [7102403], // ViralSweep
-        logo: '/logos/viralsweep.png',
+        logo: '/logos/viralsweep.jpg',
     },
     {
         name: 'Rich Returns',
@@ -91,7 +91,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['address validator'],
         storeIdPrefixes: [],
         teamIds: [7102393], // Address Validator
-        logo: '/logos/address-validator.png',
+        logo: '/logos/address-validator.jpg',
     },
 ];
 
