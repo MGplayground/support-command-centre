@@ -32,7 +32,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['reviews.io', 'reviews', 'cancellation'],
         storeIdPrefixes: ['RI_'],
         teamIds: [7096884], // REVIEWS.io - Support (T1 main)
-        logo: '/logos/logo3.png',
+        logo: '/logos/reviews-io.png',
     },
     {
         name: 'Influence',
@@ -41,7 +41,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['influence'],
         storeIdPrefixes: ['INF_'],
         teamIds: [7096885], // Influence.io
-        logo: '/logos/logo4.png',
+        logo: '/logos/influence.png',
     },
     {
         name: 'Boost',
@@ -50,7 +50,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['boost'],
         storeIdPrefixes: ['BST_'],
         teamIds: [7102413], // Boost T1
-        logo: '/logos/logo5.png',
+        logo: '/logos/boost.png',
     },
     {
         name: 'Clearer',
@@ -67,7 +67,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['viralsweep'],
         storeIdPrefixes: ['VS_'],
         teamIds: [7102403], // ViralSweep
-        logo: '/logos/logo1.png',
+        logo: '/logos/viralsweep.png',
     },
     {
         name: 'Rich Returns',
@@ -76,7 +76,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['rich returns', 'richreturns'],
         storeIdPrefixes: ['RR_'],
         teamIds: [7102402], // T1 - Rich Returns
-        logo: '/logos/logo2.png',
+        logo: '/logos/rich-returns.png',
     },
     {
         name: 'ConversionBear',
@@ -93,7 +93,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['address validator'],
         storeIdPrefixes: [],
         teamIds: [7102393], // Address Validator
-        logo: '/logos/address-validator.jpg',
+        logo: '/logos/address-validator.png',
     },
 ];
 
