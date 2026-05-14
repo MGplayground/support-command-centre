@@ -60,7 +60,7 @@ export default function ProductCard({ product }: ProductCardProps) {
                                 alt={`${product.name} logo`}
                                 width={24}
                                 height={24}
-                                className="object-cover object-left w-full h-full rounded-sm"
+                                className="object-contain"
                                 onError={() => setImgError(true)}
                             />
                         </div>

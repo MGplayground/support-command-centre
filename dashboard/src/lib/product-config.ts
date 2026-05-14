@@ -59,6 +59,7 @@ export const PRODUCT_CONFIGS: ProductDef[] = [
         ticketTypeAliases: ['clearer'],
         storeIdPrefixes: [],
         teamIds: [],
+        logo: '/logos/clearer.png',
     },
     {
         name: 'ViralSweep',
